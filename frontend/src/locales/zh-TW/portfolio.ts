@@ -155,6 +155,16 @@ export const portfolio = {
   page: {
     title: '我的投資組合',
     refresh: '重新整理',
+
+    /**
+     * 頁籤。#146：現貨是平台的門面（SHOW_PERPETUALS 預設關），所以排在前面且
+     * 是預設；部位是第二頁。Simple／Expert 共用同一組字——「部位」是本平台對
+     * 槓桿持倉的固定講法，不用「合約」。
+     */
+    tab: {
+      spot:      '現貨',
+      positions: '部位',
+    },
     connectWallet: '連接錢包以查看你的投資組合。',
 
     unsupportedNetwork: '不支援的網路',

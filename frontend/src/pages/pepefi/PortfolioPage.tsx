@@ -46,6 +46,8 @@ import Stack from '@mui/material/Stack';
 import Button from '@mui/material/Button';
 import IconButton from '@mui/material/IconButton';
 import Chip from '@mui/material/Chip';
+import Tabs from '@mui/material/Tabs';
+import Tab from '@mui/material/Tab';
 import Divider from '@mui/material/Divider';
 import TableContainer from '@mui/material/TableContainer';
 import Table from '@mui/material/Table';
@@ -62,6 +64,10 @@ import { useToast } from 'src/components/pepefi/ToastProvider'
 const SHORT_ADDR = (a: string) => `${a.slice(0, 6)}…${a.slice(-4)}`;
 
 // ── Types ────────────────────────────────────────────────────────────────────
+
+/** #146：現貨為預設頁籤，部位獨立第二頁籤。 */
+type PortfolioTab = 'spot' | 'positions';
+
 interface RawCopyRecord {
   trader:        string;
   versionId:     bigint;
@@ -221,6 +227,11 @@ export default function PortfolioPage() {
   const [freeMargin, setFreeMargin] = useState(0n);
   const [withdrawAmt, setWithdrawAmt] = useState('');
   const [isLoaded,   setIsLoaded]   = useState(false);
+
+  // #146：預設停在現貨。刻意不記住上次選的頁籤——這一頁回答「我現在怎麼樣」，
+  // 而平台預設的答案是現貨；記住選擇會讓一個只買現貨的人某次點進部位之後，
+  // 往後每次進來都先看到一個跟他無關的表。
+  const [tab, setTab] = useState<PortfolioTab>('spot');
 
   // 這三項各自成功與否,獨立於它們讀失敗時退回的預設值([]、[]、0n)。
   // 「空投資組合」的判斷需要知道「讀失敗」跟「讀到、真的是空」的差別——
@@ -572,6 +583,21 @@ export default function PortfolioPage() {
           shape — net worth on top, positions and their actions below. */}
       <NetWorthHero parts={netWorthParts} pnlPct={pnlPctStr} loading={!isLoaded} />
 
+      {/* ── 頁籤 ─────────────────────────────────────────────────────────────
+          #146：現貨為主，部位獨立第二頁。Net Worth hero 留在頁籤**之上**——兩
+          個頁籤回答的是同一個「我現在怎麼樣」，那個數字不該隨頁籤變動，否則切
+          過去時它閃一下，會讓人以為淨值真的變了。 */}
+      <Tabs
+        value={tab}
+        onChange={(_, val) => setTab(val)}
+        sx={{ borderBottom: 1, borderColor: 'divider' }}
+      >
+        <Tab value="spot"      label={t.portfolio.page.tab.spot}      sx={{ textTransform: 'none' }} />
+        <Tab value="positions" label={t.portfolio.page.tab.positions} sx={{ textTransform: 'none' }} />
+      </Tabs>
+
+      {tab === 'spot' && (
+      <>
       {/* RWA 是本平台的最大賣點，緊接在淨值 hero 之後、任何操作之前——見
           RwaAllocation.tsx 頂部註解。Simple／Expert 皆顯示，零持倉也照樣顯示。 */}
       <RwaAllocation rows={positions} holdings={synthHoldings.rows} />
@@ -582,7 +608,11 @@ export default function PortfolioPage() {
       <KYCStatusCard kycRegistry={contracts?.kycRegistry ?? null} userAddress={wallet.address ?? null} />
 
       <QuickActions mode={mode} />
+      </>
+      )}
 
+      {tab === 'positions' && (
+      <>
       {/* Copy stats.
           Free Margin and Open Positions used to sit here too. After the merge
           each was on screen three times — Free Margin as the hero's "Trading"
@@ -1004,6 +1034,8 @@ export default function PortfolioPage() {
         </Grid>
         )}
       </Grid>
+      </>
+      )}
     </Container>
   );
 }
