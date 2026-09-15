@@ -7,6 +7,12 @@ export const vault: Catalog['vault'] = {
   connectWallet: 'Connect wallet to use the LP Vault.',
   viewOnEtherscan: 'View on Etherscan ↗',
 
+  title: 'Insurance Vault',
+  titleSimple: 'Vault',
+  subtitle: 'Deposit USDC to earn protocol yield',
+
+  simpleYieldActive: 'This vault is currently earning yield from trading fees.',
+
   stat: {
     totalAssets: 'Total Assets',
     sharePrice: 'Share Price',
