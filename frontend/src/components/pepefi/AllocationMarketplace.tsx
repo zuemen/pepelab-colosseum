@@ -30,6 +30,7 @@ import { useContracts } from 'src/hooks/useContracts';
 import { useV2Contracts } from 'src/hooks/useV2Contracts';
 import { CHAIN_NAMES } from 'src/contracts/addresses';
 import { f18 } from 'src/lib/pepefi/format';
+import { withStable } from 'src/lib/pepefi/tokenLabel';
 import { safeRead } from 'src/lib/pepefi/safeRead';
 import { explorerTx } from 'src/lib/pepefi/notify';
 import { prettyError } from 'src/lib/pepefi/errorMessages';
@@ -41,6 +42,7 @@ import {
   type SpotLeg,
   type LegStatus,
   type LegOutcome,
+  type PlannedLeg,
   type AdoptionResult,
 } from 'src/lib/pepefi/allocationAdoption';
 import AssetIcon from 'src/components/pepefi/AssetIcon';
@@ -55,6 +57,9 @@ import { TableSkeleton } from 'src/components/pepefi/Skeleton';
 // 這個元件只負責讀鏈、接上 ethers、把結果畫出來。
 
 const asTx = (x: unknown) => x as ContractTransactionResponse;
+
+/** 送出前就判斷出來的失敗，做成跟 ethers 解碼後的 custom error 同一個形狀，讓 prettyError 用同一份對照表。 */
+const namedRevert = (name: string) => ({ revert: { name } });
 
 interface PublishedAllocation {
   publisher: string;
@@ -248,7 +253,8 @@ function AdoptDialog({ item, onClose }: { item: PublishedAllocation; onClose: ()
 
   const [amount, setAmount] = useState('');
   const [balance, setBalance] = useState<bigint | null>(null);
-  const [gate, setGate] = useState<{ paused: boolean; halted: boolean }>({ paused: false, halted: false });
+  // 只用來提早把確認鈕關掉、講原因；真正的閘門在 confirm() 的 check 裡，讀不到會擋。
+  const [vaultGate, setVaultGate] = useState<{ paused: boolean; halted: boolean }>({ paused: false, halted: false });
   const [running, setRunning] = useState(false);
   const [progress, setProgress] = useState<LegOutcome[] | null>(null);
   const [result, setResult] = useState<AdoptionResult | null>(null);
@@ -262,7 +268,7 @@ function AdoptDialog({ item, onClose }: { item: PublishedAllocation; onClose: ()
         safeRead(v2.vault.mintingHalted() as Promise<boolean>, false),
       ]);
       setBalance(bal);
-      setGate({ paused, halted });
+      setVaultGate({ paused, halted });
     })();
   }, [contracts, v2, wallet.address, result]);
 
@@ -274,16 +280,16 @@ function AdoptDialog({ item, onClose }: { item: PublishedAllocation; onClose: ()
   }
   const plan = parsed !== null ? planAdoption(parsed, item.legs) : null;
 
-  const problem =
-    gate.paused ? t.adopt.dialog.vaultPaused
-    : gate.halted ? t.adopt.dialog.mintingHalted
+  const blockingReason =
+    vaultGate.paused ? t.adopt.dialog.vaultPaused
+    : vaultGate.halted ? t.adopt.dialog.mintingHalted
     : !amount ? null
     : parsed === null ? t.adopt.dialog.badAmount
     : !plan?.ok ? t.adopt.dialog.tooSmall
     : balance !== null && parsed > balance ? t.adopt.dialog.insufficientBalance
     : null;
 
-  const canConfirm = !!plan?.ok && !problem && !running && !result && !!contracts && !!v2;
+  const canConfirm = !!plan?.ok && !blockingReason && !running && !result && !!contracts && !!v2;
 
   const confirm = async () => {
     if (!plan?.ok || !contracts || !v2) return;
@@ -293,7 +299,20 @@ function AdoptDialog({ item, onClose }: { item: PublishedAllocation; onClose: ()
         plan.legs,
         {
           check: async (leg) => {
-            await v2.vault.previewMint(leg.assetId, leg.usdc);
+            // 送出前重演 mint() 自己的閘門（AssetVaultV2_4.mint）。previewMint 只擋
+            // 未註冊／沒價格／價格過期；暫停、鎖存的鑄造暫停、發行上限要自己讀。
+            // 不走 safeRead——讀不到就當作買不了，不預設放行。唯一重演不了的是
+            // ReserveRatioTooLow（轉帳之後才算），那一種仍可能落到 partial。
+            const [paused, halted, preview, outstanding, cap] = await Promise.all([
+              v2.vault.paused() as Promise<boolean>,
+              v2.vault.mintingHalted() as Promise<boolean>,
+              v2.vault.previewMint(leg.assetId, leg.usdc) as Promise<[bigint, bigint]>,
+              v2.vault.exposureOf(leg.assetId) as Promise<bigint>,
+              v2.vault.assetCap(leg.assetId) as Promise<bigint>,
+            ]);
+            if (paused) throw namedRevert('EnforcedPause');
+            if (halted) throw namedRevert('MintingHalted');
+            if (outstanding + preview[0] > cap) throw namedRevert('CapExceeded');
           },
           approve: async (total) => {
             await asTx(await contracts.usdc.approve(v2.vaultAddr, total)).wait();
@@ -312,8 +331,8 @@ function AdoptDialog({ item, onClose }: { item: PublishedAllocation; onClose: ()
     }
   };
 
-  const rows: (SpotLeg & { usdc?: bigint; status?: LegStatus; txHash?: string })[] =
-    progress ?? (plan?.ok ? plan.legs : item.legs);
+  // 還沒輸入金額 → 只有比例；有合法金額 → 加上每檔金額；開始採用後 → 再加上狀態。
+  const rows: (SpotLeg | PlannedLeg | LegOutcome)[] = progress ?? (plan?.ok ? plan.legs : item.legs);
 
   return (
     <Dialog open fullWidth maxWidth="sm" onClose={running ? undefined : onClose} disableEscapeKeyDown={running}>
@@ -344,7 +363,8 @@ function AdoptDialog({ item, onClose }: { item: PublishedAllocation; onClose: ()
           </TableHead>
           <TableBody>
             {rows.map((r) => {
-              const href = r.txHash ? explorerTx(r.txHash, wallet.chainId) : null;
+              const outcome = 'status' in r ? r : null;
+              const href = outcome?.txHash ? explorerTx(outcome.txHash, wallet.chainId) : null;
               return (
                 <TableRow key={r.assetId}>
                   <TableCell>
@@ -357,12 +377,12 @@ function AdoptDialog({ item, onClose }: { item: PublishedAllocation; onClose: ()
                     {fWeight(r.weightBps)}
                   </TableCell>
                   <TableCell align="right" sx={{ fontFamily: MONO }}>
-                    {r.usdc !== undefined ? `${f18(r.usdc, { dp: 2 })} USDC` : '—'}
+                    {'usdc' in r ? withStable(f18(r.usdc, { dp: 2 })) : '—'}
                   </TableCell>
-                  {progress && r.status && (
+                  {outcome && (
                     <TableCell align="right">
                       <Stack direction="row" spacing={0.5} alignItems="center" justifyContent="flex-end">
-                        <Chip size="small" color={STATUS_COLOR[r.status]} label={t.adopt.status[r.status]} />
+                        <Chip size="small" color={STATUS_COLOR[outcome.status]} label={t.adopt.status[outcome.status]} />
                         {href && (
                           <Link href={href} target="_blank" rel="noopener noreferrer" variant="caption">
                             {t.adopt.dialog.viewTx}
@@ -377,8 +397,8 @@ function AdoptDialog({ item, onClose }: { item: PublishedAllocation; onClose: ()
           </TableBody>
         </Table>
 
-        {problem && !result && <Alert severity="warning">{problem}</Alert>}
-        {plan?.ok && !problem && !progress && (
+        {blockingReason && !result && <Alert severity="warning">{blockingReason}</Alert>}
+        {plan?.ok && !blockingReason && !progress && (
           <Typography variant="caption" color="text.secondary">
             {interpolate(t.adopt.dialog.txCount, { total: plan.legs.length + 1, legs: plan.legs.length })}
           </Typography>
@@ -410,35 +430,31 @@ function OutcomeAlert({ result }: { result: AdoptionResult }) {
   const firstError = result.error ?? result.legs.find((l) => l.error !== undefined)?.error;
   const reason = firstError !== undefined ? prettyError(firstError, 'adopt') : null;
 
-  switch (result.outcome) {
-    case 'complete':
-      return (
-        <Alert severity="success">{interpolate(t.adopt.outcome.complete, { count: result.legs.length })}</Alert>
-      );
-    case 'partial':
-      return (
-        <Alert severity="warning">
-          {interpolate(t.adopt.outcome.partial, { bought: names('bought'), failed: names('failed') })}
-          {reason && <Box sx={{ mt: 0.5 }}>{reason}</Box>}
-        </Alert>
-      );
-    case 'failed':
-      return (
-        <Alert severity="error">
-          {t.adopt.outcome.failed}
-          {reason && <Box sx={{ mt: 0.5 }}>{reason}</Box>}
-        </Alert>
-      );
-    case 'blocked':
-      return (
-        <Alert severity="warning">
-          {interpolate(t.adopt.outcome.blocked, { symbols: names('unavailable') })}
-          {reason && <Box sx={{ mt: 0.5 }}>{reason}</Box>}
-        </Alert>
-      );
-    default: {
-      const exhaustive: never = result.outcome;
-      return exhaustive;
+  const summary = (): { severity: 'success' | 'warning' | 'error'; text: string } => {
+    switch (result.outcome) {
+      case 'complete':
+        return { severity: 'success', text: interpolate(t.adopt.outcome.complete, { count: result.legs.length }) };
+      case 'partial':
+        return {
+          severity: 'warning',
+          text: interpolate(t.adopt.outcome.partial, { bought: names('bought'), failed: names('failed') }),
+        };
+      case 'failed':
+        return { severity: 'error', text: t.adopt.outcome.failed };
+      case 'blocked':
+        return { severity: 'warning', text: interpolate(t.adopt.outcome.blocked, { symbols: names('unavailable') }) };
+      default: {
+        const exhaustive: never = result.outcome;
+        return exhaustive;
+      }
     }
-  }
+  };
+  const { severity, text } = summary();
+
+  return (
+    <Alert severity={severity}>
+      {text}
+      {reason && <Box sx={{ mt: 0.5 }}>{reason}</Box>}
+    </Alert>
+  );
 }

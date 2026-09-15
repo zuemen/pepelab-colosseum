@@ -57,6 +57,8 @@ export const errors = {
     MintingHalted:
       '鑄造已暫停——鏈上觀測到儲備率跌破門檻，新的買入需要等下一次觀測顯示已恢復。贖回不受影響，可以正常賣出。',
     ReserveRatioTooLow: '這筆買入會讓金庫儲備率低於門檻，已被拒絕。可以嘗試更小的金額，或稍後再試。',
+    CapExceeded: '這檔資產已接近發行上限，這筆買入會超過上限。可以嘗試更小的金額，或稍後再試。',
+    EnforcedPause: '金庫目前暫停中，暫時無法買進。',
 
     // ── PepeAMM（恆定乘積池：swap 會有滑點，且受 oracle 護欄限制）─────────────
     StaleOraclePrice:

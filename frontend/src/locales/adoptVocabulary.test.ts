@@ -34,6 +34,8 @@ function offenders(catalog: typeof zhTW): string[] {
         MintingHalted: catalog.errors.contract.MintingHalted,
         StalePrice: catalog.errors.contract.StalePrice,
         ReserveRatioTooLow: catalog.errors.contract.ReserveRatioTooLow,
+        CapExceeded: catalog.errors.contract.CapExceeded,
+        EnforcedPause: catalog.errors.contract.EnforcedPause,
         userRejected: catalog.errors.contract['user rejected'],
         executionReverted: catalog.errors.contract['execution reverted'],
         reverted: catalog.errors.reverted.adopt,

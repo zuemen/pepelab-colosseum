@@ -59,6 +59,8 @@ export const errors: Catalog['errors'] = {
     // ── AssetVaultV2 (#99: reserve-ratio observation and auto-halt on breach) ──
     MintingHalted:
       "Minting is paused — an on-chain observation found the reserve ratio below the floor. New buys need a later observation to show it's recovered. Redemption is unaffected — you can still sell.",
+    CapExceeded: 'This asset is close to its issuance cap and this buy would exceed it. Try a smaller amount, or try again later.',
+    EnforcedPause: 'The vault is paused, so buying is unavailable right now.',
     ReserveRatioTooLow:
       "This buy would leave the vault's reserve ratio below the floor, so it was rejected. Try a smaller amount, or wait and try again.",
 
