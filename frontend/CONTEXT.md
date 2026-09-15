@@ -106,6 +106,9 @@ _Avoid_: ESG as a synonym (ESG names the measured dimensions; Sustainability nam
 The contract-layer mechanism that settles positions without an expiry date — funding rate, mark price, liquidation. A pure implementation detail: it never appears in display text, and it is never rendered into Chinese, because 永續合約 on a screen would collide head-on with Sustainability. A user learns what they own and what it costs; they never learn that a perpetual is what carries it.
 _Avoid_: 永續合約 or any Chinese rendering in display text, perp, swap
 
+Bare 合約 (without 永續) inherits the same ban when it's standing in for a user's open position — the collision risk is with the word alone, not just the compound. Screens naming what a user holds use 部位 (Position), already pinned by the trading-vocabulary table (未平倉部位 → Open Position(s)); 合約 is reserved for contract-layer/legal senses (e.g. a Solidity contract, a legal agreement), never for "the thing a user has open."
+_Avoid_ (for 合約 naming a user's holding): 合約 alone — use 部位
+
 Both senses of 永續 exist in this repo the way both senses of RWA do, and for the same reason — the display language and the contract language answer to different audiences. The difference is that the two RWA senses can safely sit on one screen, while the two 永續 senses cannot, so the perpetual sense is barred from the display layer entirely rather than merely kept distinct from it.
 
 ### Carbon and attestation
@@ -136,17 +139,19 @@ _Avoid_: variance, error, spread, confidence
 
 ### Allocation and sharing
 
+Allocation/Adopt is a Simple Mode concept and names a genuinely unleveraged product — buying the same spot token mix a publisher holds, snapshot-style, via `AssetVaultV2_4.mint`. It is a different product from the leveraged CFD position-copying `CopyTracker` already implements; [ADR 0007](../docs/ADR-007-allocation-adoption-is-a-new-unleveraged-product.md) (root `docs/`) is why the two are kept apart rather than merged under one name — reusing CopyTracker's leverage under Allocation's spot-sounding language would let a Simple Mode user take on leverage risk in a screen that is barred from ever saying "leverage" or "liquidation." CopyTracker's existing mechanism lives in Expert Mode only, under its own honest trading-desk words (Trader, Copy, Follow, Position) — Expert Mode isn't bound by this section's `_Avoid_` lists.
+
 **Allocation**:
-A weighted mix of assets that sums to the whole — the thing a user adopts and holds. Versioned, published openly, and constrained so that a mix concentrated in one asset cannot be published under the name.
+A weighted mix of *spot* assets that sums to the whole — the thing a user adopts and holds by buying the underlying tokens outright. Versioned, published openly, and constrained so that a mix concentrated in one asset cannot be published under the name. Never involves a leveraged position.
 _Avoid_: strategy, portfolio (that is what a user ends up with, not what a publisher writes), basket, signal
 
 **Allocation Publisher**:
-Someone who publishes an Allocation and earns a share of the profit their adopters make. Puts up a stake first, so the reputation has a cost. Never called a trader — the word names the activity this platform moved away from.
-_Avoid_: trader, strategist, manager, influencer
+Someone who publishes an Allocation and earns a share of the profit their adopters make. Puts up a stake first, so the reputation has a cost. Never called a trader in this context — that word belongs to the separate, Expert-Mode-only CopyTracker product.
+_Avoid_ (in this context): trader, strategist, manager, influencer
 
 **Adopt**:
-To put your own money to work following an Allocation. Your positions, your wallet, your risk — nothing is pooled, and the publisher never holds your funds.
-_Avoid_: copy, follow, mirror, subscribe (all four describe the trading-desk product this replaced)
+To buy the same spot token mix an Allocation Publisher currently holds, in your own wallet, at today's weights — a one-time snapshot, not a standing subscription that rebalances as the publisher's mix changes. Your tokens, your wallet, your risk — nothing is pooled, the publisher never holds your funds, and no leverage is ever involved.
+_Avoid_: copy, follow, mirror, subscribe (in this context — those words describe CopyTracker, the separate leveraged product)
 
 **Diversification**:
 How spread out a holding is across its assets. Measured and shown for a user's own holdings, never enforced on them; enforced only on a published Allocation, where the word is a claim being made to other people.
