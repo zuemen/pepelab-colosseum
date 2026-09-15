@@ -28,7 +28,7 @@ import { t, interpolate } from 'src/locales';
 import { usePepefiWallet } from 'src/layouts/pepefi';
 import { useContracts } from 'src/hooks/useContracts';
 import { useV2Contracts } from 'src/hooks/useV2Contracts';
-import { CHAIN_NAMES } from 'src/contracts/addresses';
+import { CHAIN_NAMES, getV2Stack } from 'src/contracts/addresses';
 import { f18 } from 'src/lib/pepefi/format';
 import { withStable } from 'src/lib/pepefi/tokenLabel';
 import { safeRead } from 'src/lib/pepefi/safeRead';
@@ -140,6 +140,12 @@ export default function AllocationMarketplace() {
       ? (CHAIN_NAMES[wallet.chainId] ?? interpolate(t.adopt.empty.unknownChain, { chainId: wallet.chainId }))
       : interpolate(t.adopt.empty.unknownChain, { chainId: '—' });
 
+  // 「這條鏈有沒有部署」是靜態的地址表查詢，跟「現在連不連得上」是兩件事——
+  // 模擬錢包（無 provider/signer）在一條已部署的鏈上也會讓 useV2Contracts 回傳
+  // null，那不是「未部署」，是模擬錢包本來就讀不到任何鏈上資料（見 CONTEXT.md
+  // 的 Mock Wallet 詞條）。兩種原因分開講，不要把後者講成前者。
+  const deployedHere = !!getV2Stack(wallet.chainId);
+
   return (
     <Container maxWidth="lg" sx={{ py: 3, display: 'flex', flexDirection: 'column', gap: 3 }}>
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 2 }}>
@@ -156,8 +162,10 @@ export default function AllocationMarketplace() {
         </IconButton>
       </Box>
 
-      {!v2 ? (
+      {!deployedHere ? (
         <Alert severity="info">{t.adopt.notDeployed}</Alert>
+      ) : !v2 ? (
+        <Alert severity="info">{wallet.isMock ? t.adopt.mockWallet : t.adopt.notConnected}</Alert>
       ) : (
         <>
           <Alert severity="info" variant="outlined">
