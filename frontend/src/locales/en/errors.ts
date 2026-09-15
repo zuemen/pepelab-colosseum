@@ -139,6 +139,8 @@ export const errors: Catalog['errors'] = {
       "Daily check-in failed (Reverted). Check that: 1. You haven't already checked in today; 2. The rewards contract's PEPE pool is funded.",
     generic:
       'Transaction execution failed (Reverted). Common causes: not enough ETH for the execution fee, insufficient margin, or a stale on-chain price. Check your balance and parameters and try again.',
+    adopt:
+      'Buy failed (Reverted). Common causes: not enough ETH for gas, not enough USDC, or a stale on-chain price. Check your balance and try again.',
   },
 
   unrecognised:

@@ -4,6 +4,7 @@ import { esg } from './esg';
 import { kyc } from './kyc';
 import { nav } from './nav';
 import { copy } from './copy';
+import { adopt } from './adopt';
 import { x402 } from './x402';
 import { pepe } from './pepe';
 import { meta } from './meta';
@@ -66,6 +67,7 @@ const en: Catalog = {
   pepelab,
   copy,
   marketplace,
+  adopt,
   history,
   traderProfile,
   traderDashboard,

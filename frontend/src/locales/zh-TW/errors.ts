@@ -124,6 +124,9 @@ export const errors = {
       '每日簽到失敗 (Reverted)。請確認：1. 您今天尚未簽到過；2. 激勵合約的 PEPE 資金池已充值足夠資金。',
     generic:
       '交易執行失敗 (Reverted)。常見原因：ETH 不足以支付執行費、保證金不足、或鏈上價格過期。請檢查餘額與參數後再試。',
+    /** #149：採用配置的現貨買進——不能沿用 generic，那句提到保證金。 */
+    adopt:
+      '買進失敗 (Reverted)。常見原因：ETH 不足以支付 gas、USDC 餘額不足、或鏈上價格過期。請檢查餘額後再試。',
   },
 
   unrecognised:
