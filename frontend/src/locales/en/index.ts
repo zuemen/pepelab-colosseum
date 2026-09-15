@@ -7,6 +7,7 @@ import { copy } from './copy';
 import { x402 } from './x402';
 import { pepe } from './pepe';
 import { meta } from './meta';
+import { adopt } from './adopt';
 import { stake } from './stake';
 import { vault } from './vault';
 import { whale } from './whale';
@@ -66,6 +67,7 @@ const en: Catalog = {
   pepelab,
   copy,
   marketplace,
+  adopt,
   history,
   traderProfile,
   traderDashboard,

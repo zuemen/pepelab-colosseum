@@ -16,6 +16,7 @@ import {
 } from 'src/lib/pepefi/chainLogs';
 import ESGBadge from 'src/components/pepefi/ESGBadge';
 import AllocationRow from 'src/components/pepefi/AllocationRow';
+import AllocationMarketplace from 'src/components/pepefi/AllocationMarketplace';
 import Podium from 'src/components/pepefi/Podium';
 import ScoreBreakdownPopover from 'src/components/pepefi/ScoreBreakdownPopover';
 import { getPepeAvatar } from 'src/utils/pepefi-assets';
@@ -128,7 +129,17 @@ const fWindow = (hours: number): string =>
   : interpolate(t.marketplace.footer.windowDays, { days: (hours / 24).toFixed(1) });
 
 // ── Component ────────────────────────────────────────────────────────────────
+/**
+ * #149 / ADR-007：Simple Mode 看到的是配置市集（無槓桿的現貨採用），Expert Mode
+ * 才是交易者排行榜（CopyTracker 的槓桿跟單）。兩個是不同的商品，不是同一個畫面
+ * 換兩套詞——拆成兩個元件，Simple Mode 也就不會去掃排行榜那 31 段 getLogs。
+ */
 export default function MarketplacePage() {
+  const { mode } = useMode();
+  return mode === 'simple' ? <AllocationMarketplace /> : <TraderLeaderboard />;
+}
+
+function TraderLeaderboard() {
   const wallet = usePepefiWallet();
   const contracts  = useContracts(wallet.provider, wallet.signer, wallet.chainId);
   const { data: esg } = useESG(contracts?.esgRegistry ?? null);

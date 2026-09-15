@@ -57,6 +57,8 @@ export const errors = {
     MintingHalted:
       '鑄造已暫停——鏈上觀測到儲備率跌破門檻，新的買入需要等下一次觀測顯示已恢復。贖回不受影響，可以正常賣出。',
     ReserveRatioTooLow: '這筆買入會讓金庫儲備率低於門檻，已被拒絕。可以嘗試更小的金額，或稍後再試。',
+    CapExceeded: '這檔資產已接近發行上限，這筆買入會超過上限。可以嘗試更小的金額，或稍後再試。',
+    EnforcedPause: '金庫目前暫停中，暫時無法買進。',
 
     // ── PepeAMM（恆定乘積池：swap 會有滑點，且受 oracle 護欄限制）─────────────
     StaleOraclePrice:
@@ -124,6 +126,9 @@ export const errors = {
       '每日簽到失敗 (Reverted)。請確認：1. 您今天尚未簽到過；2. 激勵合約的 PEPE 資金池已充值足夠資金。',
     generic:
       '交易執行失敗 (Reverted)。常見原因：ETH 不足以支付執行費、保證金不足、或鏈上價格過期。請檢查餘額與參數後再試。',
+    /** #149：採用配置的現貨買進——不能沿用 generic，那句提到保證金。 */
+    adopt:
+      '買進失敗 (Reverted)。常見原因：ETH 不足以支付 gas、USDC 餘額不足、或鏈上價格過期。請檢查餘額後再試。',
   },
 
   unrecognised:

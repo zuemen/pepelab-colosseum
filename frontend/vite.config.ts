@@ -60,6 +60,11 @@ export default defineConfig(({ mode }) => {
     server: {
       port: PORT,
       host: true,
+      // WSL 底下跑 dev server、原始碼在 Windows 端（/mnt/c）編輯時，原生 inotify
+      // 事件常常傳不過來——存檔了 HMR 也不知道，只能整個 dev server 重開才看得到
+      // 最新的檔案。polling 用輪詢代替事件通知，兩邊都能正常收到變更；代價是
+      // CPU 多一點週期性檢查，對開發體驗不算大。
+      watch: { usePolling: true },
       headers: {
         // Allow eval() needed by Vite dev-mode source maps.
         //
