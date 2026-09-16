@@ -1,8 +1,21 @@
 /**
- * 交易者質押頁：質押、聲譽分數、解質押冷卻，以及 PEPE 收益農場。
+ * 交易者質押頁：兩個清楚分開的區塊——
+ * 1. 聲譽質押（TraderStake.sol，質押 USDC 換發布資格，可能被罰沒）
+ * 2. PEPE 質押（PepeStaking.sol，質押 PEPE 賺 PEPE，純收益、無罰沒）
  */
 export const stake = {
   viewOn: '在 {explorer} 查看 ↗',
+
+  sections: {
+    reputation: {
+      title: '① 聲譽質押',
+      subtitle: '質押 {token}，換取發布策略、參與跟單市場的資格——策略造成跟隨者虧損時可能被罰沒。',
+    },
+    pepe: {
+      title: '② PEPE 質押',
+      subtitle: '質押 PEPE 賺 PEPE。純收益機制，不會被罰沒，但獎勵完全取決於合約目前是否有在跑的獎勵期。',
+    },
+  },
 
   current: {
     title: '你的質押',
@@ -17,18 +30,44 @@ export const stake = {
     minimum: '最低質押金額：{amount} {token} · 向跟隨者展現你的風險共擔',
   },
 
-  /** PEPE 收益農場。整區是展示用的試算，不是鏈上真的獎勵池。 */
-  farm: {
-    title: 'PEPE 收益農場',
-    chip: '鏈上聯動實時挖礦',
-    subtitle: '依 {token} 聲譽質押試算 PEPE 產出（展示用，尚未接上鏈上獎勵池）',
-    aprLabel: '穩健收益率',
-    pending: '待收割 PEPE 收益',
-    walletBalance: '錢包鏈上 PEPE 餘額',
-    accruedFrom: '依質押的 {amount} {token} 累計（展示用）',
-    notStaked: '⚠️ 您目前尚未質押 {token}',
-    harvest: '🌾 收割（展示用 · 尚未啟用）',
-    harvestDisabledHint: '尚未接上獎勵來源合約（PepeStaking 未部署），此為展示用累計',
+  /** PepeStaking.sol——真的鏈上質押、真的鏈上獎勵池，Synthetix 式 7 天週期。 */
+  pepe: {
+    title: 'PEPE 質押',
+    riskChip: '純收益 · 無罰沒',
+    staked: '已質押 PEPE',
+    pending: '待領取獎勵',
+    walletBalance: '錢包 PEPE 餘額',
+    refresh: '↺ 重新整理',
+
+    notDeployed: 'PepeStaking 尚未在本網路部署。',
+
+    periodActive: '獎勵期進行中，全體質押者目前合計每天可領 {amount} PEPE，至 {when} 結束。',
+    periodEnded: '上一輪獎勵期已於 {when} 結束，目前沒有新獎勵在累積——需等待合約 owner 呼叫 notifyRewardAmount() 開始下一輪。',
+    periodNotStarted: '合約 owner 尚未挹注任何獎勵——目前質押不會累積收益。',
+    fundingUnknown: '無法讀取獎勵資金狀態——可能是本網路的合約版本較舊，也可能只是這次讀取暫時失敗，按重新整理再試一次。',
+
+    stakeTitle: '質押 PEPE',
+    stakeDescription: '質押後立即開始依目前獎勵速率計息（若獎勵期正在跑），沒有鎖倉期，隨時可解除。',
+    stakePlaceholder: '1000',
+    staking: '質押中…',
+    stakeCta: '批准並質押',
+    stakeEnterAmount: '請輸入有效金額',
+    stakeDone: '質押成功 ✓',
+
+    withdrawTitle: '解除質押',
+    withdrawDescription: '沒有冷卻期——解除質押的 PEPE 立即回到你的錢包。',
+    withdrawPlaceholder: '500',
+    withdrawing: '解除質押中…',
+    withdrawCta: '解除質押',
+    withdrawEnterAmount: '請輸入解除質押金額',
+    withdrawDone: '解除質押成功 ✓',
+    withdrawNothingStaked: '目前沒有已質押的 PEPE 可以解除',
+
+    claiming: '領取中…',
+    claimCta: '領取獎勵',
+    claimDone: '獎勵已領取 ✓',
+    claimNothing: '目前沒有可領取的獎勵',
+
     addToWallet: '🦊 加 Metamask',
     addedToWallet: '已將 PEPE 代幣合約成功加入您的 Metamask！ 🦊🐸',
     addToWalletFailed: '新增代幣失敗，請手動複製合約地址。',
@@ -73,18 +112,5 @@ export const stake = {
     cooldown: '解除質押需要 24 小時冷卻期。',
     backToMarketplace: '← 返回交易市集',
     traderDashboard: '交易者主頁 →',
-  },
-
-  /** #36：兩段免責說明各自在句中夾了 `<b>`，拆成前後片段。 */
-  markup: {
-    disclaimerBefore: '⚠ 此數字為前端依質押量與時間試算的',
-    disclaimerBold: '展示值',
-    disclaimerAfter: '，鏈上沒有對應的獎勵池， 目前無法領取。（PepeStaking 尚未在本網路部署。）',
-
-    footnoteBefore: '* 質押的 ',
-    footnoteMid1: ' 是給跟單者的聲譽保障金，本身不生息。上方的 PEPE 產出 （每質押 1 ',
-    footnoteMid2: ' 每日 0.02 PEPE）目前是',
-    footnoteBold: '前端試算的展示值',
-    footnoteAfter: '：鏈上沒有 對應的獎勵池，也沒有任何合約會把它發給你，因此收割按鈕停用。',
   },
 };
