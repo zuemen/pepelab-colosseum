@@ -1,15 +1,12 @@
 import { MONO } from 'src/components/pepefi/brandKit'
-import { useState, useEffect, useCallback, useMemo } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { Link as RouterLink } from 'react-router'
 import { parseEther } from 'ethers'
 import { useContracts } from 'src/hooks/useContracts'
 import { usePepefiWallet } from 'src/layouts/pepefi'
 import { t, interpolate } from 'src/locales'
 import { prettyError } from 'src/lib/pepefi/errorMessages'
-import { STABLE_LABEL, PEPE_LABEL } from 'src/lib/pepefi/tokenLabel'
-import { getAddresses } from 'src/contracts/addresses'
-import { isDeployed, safeRead } from 'src/lib/pepefi/safeRead'
-import { rewardPeriodStatus, dailyRewardPool } from 'src/lib/pepefi/pepeStakingView'
+import { STABLE_LABEL } from 'src/lib/pepefi/tokenLabel'
 
 import Box from '@mui/material/Box'
 import Container from '@mui/material/Container'
@@ -34,16 +31,6 @@ interface StakeInfo {
   unstakeAmount:      bigint
 }
 
-interface PepeStakeInfo {
-  staked:       bigint
-  earned:       bigint
-  totalStaked:  bigint
-  rewardRate:   bigint
-  periodFinish: bigint
-  /** null when the deployed contract can't answer rewardBudget() (pre-PA-9 legacy version). */
-  rewardBudget: bigint | null
-}
-
 const f18 = (v: bigint, d = 2) => (Number(v) / 1e18).toFixed(d)
 
 export default function TraderStakePage() {
@@ -60,130 +47,30 @@ export default function TraderStakePage() {
   const [busy,  setBusy]  = useState<Record<string, boolean>>({})
   const { notify } = useToast()
 
-  // ── PEPE Staking (PepeStaking.sol) ─────────────────────────────────────────
-  // isDeployed(undefined) is true (it only special-cases the zero-address string),
-  // so on a chain not in CHAIN_MAP `getAddresses` returns null and the `?.` alone
-  // would read as "deployed" — check the address exists before asking isDeployed.
-  const pepeAddr = getAddresses(wallet.chainId)?.PepeStaking
-  const pepeDeployed = !!pepeAddr && isDeployed(pepeAddr)
-  const [onChainPepeBalance, setOnChainPepeBalance] = useState<bigint | null>(null)
-  const [pepeStake,      setPepeStake]      = useState<PepeStakeInfo | null>(null)
-  const [pepeStakeInput, setPepeStakeInput] = useState('1000')
-  const [pepeWithdrawAmt, setPepeWithdrawAmt] = useState('')
-
-  const addPepeToWallet = async () => {
-    if (!window.ethereum || !contracts) return
-    try {
-      await window.ethereum.request({
-        method: 'wallet_watchAsset',
-        params: {
-          type: 'ERC20',
-          options: {
-            address: String(contracts.pepeToken.target),
-            symbol: 'PEPE',
-            decimals: 18,
-          },
-        },
-      })
-      notify(t.stake.pepe.addedToWallet, true)
-    } catch (e) {
-      console.error('Add PEPE failed', e)
-      notify(t.stake.pepe.addToWalletFailed, false)
-    }
-  }
-
   const setLoad = (k: string, v: boolean) => setBusy(p => ({ ...p, [k]: v }))
 
   const fetchAll = useCallback(async () => {
     if (!contracts || !wallet.address) return
     try {
-      // Both groups are independent contract reads keyed off the same wallet.address —
-      // kick them off together instead of awaiting reputation before starting PEPE.
-      const reputationRead = Promise.all([
+      const [rawInfo, score, elig, min, cd] = await Promise.all([
         contracts.traderStake.getStake(wallet.address),
         contracts.traderStake.reputationScore(wallet.address),
         contracts.traderStake.isEligible(wallet.address),
         contracts.traderStake.MIN_STAKE(),
         contracts.traderStake.UNSTAKE_COOLDOWN(),
-        contracts.pepeToken.balanceOf(wallet.address),
       ])
-      const pepeRead = pepeDeployed
-        ? Promise.all([
-            safeRead<bigint>(contracts.pepeStaking.balanceOf(wallet.address),  0n),
-            safeRead<bigint>(contracts.pepeStaking.earned(wallet.address),     0n),
-            safeRead<bigint>(contracts.pepeStaking.totalStaked(),              0n),
-            safeRead<bigint>(contracts.pepeStaking.rewardRate(),               0n),
-            safeRead<bigint>(contracts.pepeStaking.periodFinish(),             0n),
-            safeRead<bigint | null>(contracts.pepeStaking.rewardBudget(),      null),
-          ])
-        : null
-
-      const [[rawInfo, score, elig, min, cd, pepeBal], pepeResult] =
-        await Promise.all([reputationRead, pepeRead])
-
       const s = rawInfo as unknown as StakeInfo
       setInfo(s)
       setRepScore(score as bigint)
       setEligible(elig as boolean)
       setMinStake(min as bigint)
       setCooldown(cd as bigint)
-      setOnChainPepeBalance(pepeBal as bigint)
-
-      if (pepeResult) {
-        const [staked, earned, totalStaked, rewardRate, periodFinish, rewardBudget] = pepeResult
-        setPepeStake({ staked, earned, totalStaked, rewardRate, periodFinish, rewardBudget })
-      }
     } catch (e) {
       console.error('[stake fetch]', e)
     }
-  }, [contracts, wallet.address, pepeDeployed])
+  }, [contracts, wallet.address])
 
   useEffect(() => { void fetchAll() }, [fetchAll])
-
-  const doApproveAndStakePepe = async () => {
-    if (!contracts || !wallet.address) return
-    const amt = parseEther(pepeStakeInput || '0')
-    if (amt === 0n) { notify(t.stake.pepe.stakeEnterAmount, false); return }
-    setLoad('pepeStake', true)
-    try {
-      const approveTx = asTx(await contracts.pepeToken.approve(String(contracts.pepeStaking.target), amt))
-      await approveTx.wait()
-      const stakeTx = asTx(await contracts.pepeStaking.stake(amt))
-      await stakeTx.wait()
-      notify(t.stake.pepe.stakeDone, true, stakeTx.hash)
-      await fetchAll()
-    } catch (e) {
-      notify(prettyError(e), false)
-    } finally { setLoad('pepeStake', false) }
-  }
-
-  const doWithdrawPepe = async () => {
-    if (!contracts) return
-    const amt = parseEther(pepeWithdrawAmt || '0')
-    if (amt === 0n) { notify(t.stake.pepe.withdrawEnterAmount, false); return }
-    setLoad('pepeWithdraw', true)
-    try {
-      const tx = asTx(await contracts.pepeStaking.withdraw(amt))
-      await tx.wait()
-      notify(t.stake.pepe.withdrawDone, true, tx.hash)
-      await fetchAll()
-    } catch (e) {
-      notify(prettyError(e), false)
-    } finally { setLoad('pepeWithdraw', false) }
-  }
-
-  const doClaimPepe = async () => {
-    if (!contracts) return
-    setLoad('pepeClaim', true)
-    try {
-      const tx = asTx(await contracts.pepeStaking.claimYield())
-      await tx.wait()
-      notify(t.stake.pepe.claimDone, true, tx.hash)
-      await fetchAll()
-    } catch (e) {
-      notify(prettyError(e), false)
-    } finally { setLoad('pepeClaim', false) }
-  }
 
   const doApproveAndStake = async () => {
     if (!contracts || !wallet.address) return
@@ -256,18 +143,6 @@ export default function TraderStakePage() {
     : repScore >= 50n ? 'warning.main'
     : 'error.main'
 
-  const pepePeriodStatus = useMemo(
-    () => pepeStake ? rewardPeriodStatus(pepeStake, Date.now() / 1000) : null,
-    [pepeStake],
-  )
-  const pepeDailyPool = useMemo(
-    () => pepeStake ? dailyRewardPool(pepeStake, Date.now() / 1000) : null,
-    [pepeStake],
-  )
-  const pepePeriodEndsAt = pepeStake && pepeStake.periodFinish > 0n
-    ? new Date(Number(pepeStake.periodFinish) * 1000).toLocaleString()
-    : ''
-
   if (!wallet.isConnected) {
     return (
       <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '60vh' }}>
@@ -277,9 +152,9 @@ export default function TraderStakePage() {
   }
 
   return (
-    <Container maxWidth="sm" sx={{ py: 4, display: 'flex', flexDirection: 'column', gap: 3 }}>
+    <Container maxWidth="md" sx={{ py: 4, display: 'flex', flexDirection: 'column', gap: 3 }}>
 
-      {/* ─── Section 1: Reputation Staking (TraderStake.sol) ────────────── */}
+      {/* ─── Reputation Staking (TraderStake.sol) ───────────────────────── */}
       <Box>
         <Typography variant="h5" sx={{ fontWeight: 'bold' }}>
           {t.stake.sections.reputation.title}
@@ -507,171 +382,6 @@ export default function TraderStakePage() {
             {t.stake.info.traderDashboard}
           </Link>
         </Box>
-      </Card>
-
-      {/* ─── Section 2: PEPE Staking (PepeStaking.sol) ──────────────────── */}
-      <Box sx={{ mt: 2 }}>
-        <Typography variant="h5" sx={{ fontWeight: 'bold' }}>
-          {t.stake.sections.pepe.title}
-        </Typography>
-        <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
-          {t.stake.sections.pepe.subtitle}
-        </Typography>
-      </Box>
-
-      <Card sx={{ p: 3, display: 'flex', flexDirection: 'column', gap: 2.5 }}>
-        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <Stack direction="row" spacing={1} alignItems="center">
-            <Typography variant="h6" sx={{ fontWeight: 'bold' }}>
-              🐸 {t.stake.pepe.title}
-            </Typography>
-            <Chip label={t.stake.pepe.riskChip} color="success" size="small" variant="outlined" sx={{ fontWeight: 'bold' }} />
-          </Stack>
-          <Button variant="text" size="small" onClick={() => void fetchAll()} sx={{ textTransform: 'none' }}>
-            {t.stake.pepe.refresh}
-          </Button>
-        </Box>
-
-        {!pepeDeployed ? (
-          <Alert severity="info">{t.stake.pepe.notDeployed}</Alert>
-        ) : (
-          <>
-            <Grid container spacing={2}>
-              <Grid size={{ xs: 4 }}>
-                <Card sx={{ p: 2, bgcolor: 'background.neutral' }}>
-                  <Typography variant="overline" color="text.secondary" sx={{ fontWeight: 'bold', display: 'block', mb: 0.5 }}>
-                    {t.stake.pepe.staked}
-                  </Typography>
-                  <Typography variant="h6" sx={{ fontFamily: MONO, fontWeight: 'bold' }}>
-                    {pepeStake ? f18(pepeStake.staked, 0) : '…'}
-                  </Typography>
-                </Card>
-              </Grid>
-              <Grid size={{ xs: 4 }}>
-                <Card sx={{ p: 2, bgcolor: 'background.neutral' }}>
-                  <Typography variant="overline" color="text.secondary" sx={{ fontWeight: 'bold', display: 'block', mb: 0.5 }}>
-                    {t.stake.pepe.pending}
-                  </Typography>
-                  <Typography variant="h6" sx={{ fontFamily: MONO, fontWeight: 'bold', color: pepeStake && pepeStake.earned > 0n ? 'success.main' : 'text.primary' }}>
-                    {pepeStake ? f18(pepeStake.earned, 4) : '…'}
-                  </Typography>
-                </Card>
-              </Grid>
-              <Grid size={{ xs: 4 }}>
-                <Card sx={{ p: 2, bgcolor: 'background.neutral' }}>
-                  <Typography variant="overline" color="text.secondary" sx={{ fontWeight: 'bold', display: 'block', mb: 0.5 }}>
-                    {t.stake.pepe.walletBalance}
-                  </Typography>
-                  <Typography variant="h6" sx={{ fontFamily: MONO, fontWeight: 'bold' }}>
-                    {onChainPepeBalance !== null ? f18(onChainPepeBalance, 0) : '…'}
-                  </Typography>
-                </Card>
-              </Grid>
-            </Grid>
-
-            {pepeStake && (
-              <Alert severity={pepePeriodStatus === 'active' ? 'success' : 'warning'}>
-                {pepePeriodStatus === 'active' &&
-                  interpolate(t.stake.pepe.periodActive, {
-                    amount: pepeDailyPool !== null ? f18(pepeDailyPool, 2) : '0',
-                    when: pepePeriodEndsAt,
-                  })}
-                {pepePeriodStatus === 'ended' &&
-                  interpolate(t.stake.pepe.periodEnded, { when: pepePeriodEndsAt })}
-                {pepePeriodStatus === 'not-started' && t.stake.pepe.periodNotStarted}
-              </Alert>
-            )}
-            {pepeStake && pepeStake.rewardBudget === null && (
-              <Typography variant="caption" color="text.secondary">
-                {t.stake.pepe.fundingUnknown}
-              </Typography>
-            )}
-
-            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
-              <Typography variant="subtitle2" sx={{ fontWeight: 'bold' }}>
-                {t.stake.pepe.stakeTitle}
-              </Typography>
-              <Typography variant="body2" color="text.secondary">
-                {t.stake.pepe.stakeDescription}
-              </Typography>
-              <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap', alignItems: 'center' }}>
-                <TextField
-                  type="number"
-                  size="small"
-                  placeholder={t.stake.pepe.stakePlaceholder}
-                  value={pepeStakeInput}
-                  onChange={e => setPepeStakeInput(e.target.value)}
-                  slotProps={{ htmlInput: { min: "0", step: "100", style: { fontFamily: MONO } } }}
-                  sx={{ width: 140 }}
-                />
-                <Typography variant="body2" color="text.secondary">{PEPE_LABEL}</Typography>
-                <Button
-                  variant="contained"
-                  color="success"
-                  onClick={() => void doApproveAndStakePepe()}
-                  disabled={busy['pepeStake'] || !pepeStakeInput}
-                  sx={{ flexGrow: 1 }}
-                >
-                  {busy['pepeStake'] ? t.stake.pepe.staking : t.stake.pepe.stakeCta}
-                </Button>
-              </Box>
-            </Box>
-
-            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
-              <Typography variant="subtitle2" sx={{ fontWeight: 'bold' }}>
-                {t.stake.pepe.withdrawTitle}
-              </Typography>
-              <Typography variant="body2" color="text.secondary">
-                {t.stake.pepe.withdrawDescription}
-              </Typography>
-              <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap', alignItems: 'center' }}>
-                <TextField
-                  type="number"
-                  size="small"
-                  placeholder={t.stake.pepe.withdrawPlaceholder}
-                  value={pepeWithdrawAmt}
-                  onChange={e => setPepeWithdrawAmt(e.target.value)}
-                  slotProps={{ htmlInput: { min: "0", step: "100", style: { fontFamily: MONO } } }}
-                  sx={{ width: 140 }}
-                />
-                <Typography variant="body2" color="text.secondary">{PEPE_LABEL}</Typography>
-                <Button
-                  variant="outlined"
-                  onClick={() => void doWithdrawPepe()}
-                  disabled={busy['pepeWithdraw'] || !pepeWithdrawAmt || !pepeStake || pepeStake.staked === 0n}
-                  title={pepeStake && pepeStake.staked === 0n ? t.stake.pepe.withdrawNothingStaked : undefined}
-                  sx={{ flexGrow: 1 }}
-                >
-                  {busy['pepeWithdraw'] ? t.stake.pepe.withdrawing : t.stake.pepe.withdrawCta}
-                </Button>
-              </Box>
-              {pepeStake && pepeStake.staked === 0n && (
-                <Typography variant="caption" color="text.secondary">
-                  {t.stake.pepe.withdrawNothingStaked}
-                </Typography>
-              )}
-            </Box>
-
-            <Stack direction="row" spacing={2}>
-              <Button
-                variant="contained"
-                onClick={() => void doClaimPepe()}
-                disabled={busy['pepeClaim'] || !pepeStake || pepeStake.earned === 0n}
-                sx={{ flexGrow: 1 }}
-              >
-                {busy['pepeClaim'] ? t.stake.pepe.claiming : t.stake.pepe.claimCta}
-              </Button>
-              <Button variant="outlined" onClick={() => void addPepeToWallet()} sx={{ flexGrow: 1 }}>
-                {t.stake.pepe.addToWallet}
-              </Button>
-            </Stack>
-            {pepeStake && pepeStake.earned === 0n && (
-              <Typography variant="caption" color="text.secondary" sx={{ textAlign: 'center' }}>
-                {t.stake.pepe.claimNothing}
-              </Typography>
-            )}
-          </>
-        )}
       </Card>
 
     </Container>
