@@ -31,7 +31,7 @@ export const traderDashboard: Catalog['traderDashboard'] = {
       'You need to stake at least 100 USDC before publishing a strategy. This gives followers confidence that you have skin-in-the-game.',
     goToStake: 'Go to Trader Stake →',
 
-    empty: 'Click "+ Add Asset" to define allocations.',
+    empty: 'Click "+ Add Asset" to build your strategy.',
 
     column: {
       asset: 'Asset',
