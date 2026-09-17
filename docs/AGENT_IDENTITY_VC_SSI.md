@@ -102,10 +102,79 @@ sessionId 相符、holder==本 session key、issuer==鏈上 `session.user`、age
   錨定到鏈上 registry（列為 roadmap，本輪不改合約）。
 - **ERC-8126（代理驗證）**：VC 驗簽 + 鏈上 session 交叉比對，強化 `WV`（錢包驗證）面向。
 
-## 6. 範圍與後續
+## 6. 為什麼授權憑證放在 tool arguments，而不是傳輸層
+
+MCP 規範把授權放在傳輸層（HTTP transport 用 OAuth 2.1 / `Authorization` header），
+而且 Authorization 整章是 OPTIONAL。常見的做法（例如某金控 AI 支付 PoC 的 Secure
+Broker）是把 API key 放在 transport header，並明文要求「不要放在 tool arguments」。
+
+本專案的 `open_position` / `close_position` 反其道而行：**必填** `authVcJson`
+參數（`agent/mcp-server/src/index.ts`），在 `agent/shared/src/write.ts` 的
+`verifyVcAgainstChain` 驗簽並與鏈上 session 交叉比對。這不是疏忽，是因為兩種憑證的
+威脅模型不同。
+
+### 6.1 bearer token：拿到就是你
+
+API key / OAuth access token 是 **bearer** 憑證：伺服器只檢查「這串字對不對」，
+不檢查「是誰拿著」。放進 tool arguments 會大幅擴大外洩面——arguments 會進 LLM 的
+context window、對話紀錄、tool call log、trace、錯誤回報，甚至被模型複述進回答。
+任何一處外洩，拿到的人就能直接冒用。所以 bearer token 放 transport header、
+不讓模型看見，是正確的。
+
+### 6.2 授權 VC：自證、綁定、複製到別處沒用
+
+授權 VC 不是 bearer token，它是**簽過名的聲明**，綁定了具體的主體與範圍：
+
+- issuer = 使用者 EOA（EIP-712 簽章，改任何欄位都會驗簽失敗）
+- `credentialSubject.id` = 特定 agent 的 did:pkh
+- `sessionId` = 特定鏈上 session，caps 必須與鏈上**完全一致**
+- 下單時要求 VC 的 agent == 本伺服器持有的 session key（holder 綁定）
+
+所以把一份 VC 複製到**另一個 agent / 另一台伺服器**，它無法使用：對方沒有那把
+session key，holder 比對過不了；就算有 key，鏈上 `AgentSessionManager` 也只接受
+那個 session 的 agent 位址，並受 per-trade cap / budget / leverage / 資產白名單 /
+到期約束。VC 外洩的最壞情況被鏈上限額框住，而且 VC 的內容本身（誰授權誰、上限多少）
+並不是秘密。
+
+它放在 arguments 還有一個正面理由：**授權是逐筆呈現的**。每一次寫操作都帶著
+「這筆動作依據哪一份授權」，verifier 可以對那份授權做完整檢查並記進 audit trail；
+transport header 表達的是「這條連線是誰」，粒度是連線，不是動作。
+
+### 6.3 誠實邊界：沒做到的
+
+- **VC 沒有 per-request 的 nonce / audience / 防重放。** holder 綁定讓它在
+  「別的伺服器」上無效，但在**本伺服器**（持有 session key 的那一台）上，一份外洩的
+  VC 在過期或 session 撤銷前可以被重複使用。實際防線是鏈上限額，不是 VC 本身。
+- **MCP server 沒有傳輸層認證。** 目前只走 stdio；依 MCP 規範，stdio 本來就不走
+  HTTP Authorization 流程，信任邊界是「誰能啟動這個 process」。在這個邊界內：
+  - read tools（`get_trader_performance`、`get_funding_rate`、`get_position`、
+    `get_session`、`get_agent_verification`）**完全開放**——讀的都是鏈上公開資料，
+    對 demo 可接受；
+  - write tools 的保護只有 VC + 鏈上限額。能啟動 process 的人，拿到一份有效 VC
+    就能在限額內下單。
+- **生產化需要補：** 若改成 Streamable HTTP 對外提供，必須加上傳輸層認證
+  （OAuth 2.1 或至少 mTLS / API key in header）來回答「這條連線是誰」，
+  VC 繼續回答「這筆動作被誰授權」。兩層並存，而不是二選一。另需在 VC 或請求層加入
+  nonce / 短時效，關閉同一伺服器上的重放窗口。
+
+## 7. VC 管主體，KYA 管位址
+
+VC 回答「**誰**授權了這個 agent、授權範圍多大」。它**不**回答「這個位址本身有沒有
+問題」——受制裁、與混幣器或已知攻擊有關聯。一個持有完全合法 VC 的 agent，照樣可以
+把錢付給一個受制裁的位址；反過來，一個乾淨的位址也無法證明操作它的 agent 被授權。
+
+| | 驗證對象 | 回答的問題 | 本專案現況 |
+|---|---|---|---|
+| VC / SSI（本文件） | 主體（使用者 → agent 的授權關係） | 這個動作有沒有被授權？範圍多大？ | 已實作 |
+| KYA / KYT | 位址（對手方的鏈上風險） | 這個位址能不能往來？ | **未實作**，見 `KNOWN_LIMITATIONS.md` §17 |
+
+兩者互補而非互相取代：生產化的付款路徑應該是「VC 驗授權 → KYA 驗對手方位址 →
+簽章/送出」。
+
+## 8. 範圍與後續
 
 - 本層為**鏈下身分層**，**不改合約**（VC/SSI 不需要鏈上新方法）。
 - 鏈上錨定（ERC-8004 註冊、撤銷清單上鏈）為後續工作。
 - 前端 Agent Sessions / Agent Monitor 顯示每個 agent 的 DID 與「可發授權憑證」狀態。
 
-_最後更新：2026-06-19（Track 3）。_
+_最後更新：2026-06-19（Track 3）；§6–§7 於 2026-09-17 新增。_

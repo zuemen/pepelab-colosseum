@@ -28,7 +28,8 @@ import {
   ASSET_IDS,
   type ContractTarget,
 } from "@pepelab/shared";
-import { isSettlementEnabled, settleRevenue } from "./settlement.ts";
+import { isSettlementEnabled } from "./settlement.ts";
+import { isLedgerEnabled, enqueueSettlement, type LedgerEntry } from "./ledger.ts";
 import { getOnchainRevenue, isOnchainRevenueEnabled } from "./onchainRevenue.ts";
 import {
   getCandles,
@@ -50,6 +51,15 @@ const SETTLEMENT_TOKEN = resolveSettlementToken();
 // 單一定價來源：付費牆、帳務、文件共用。
 export const PRICE_SIGNALS = 0.01; // USDC
 export const PRICE_ORACLE = 0.005; // USDC
+
+// x402 付款授權的有效期上限（秒）。client 用它算 EIP-3009 的 validBefore。
+// 不設時 x402-hono 0.5.3 預設 300。改成 60：這兩個端點都是單次 GET、回應在秒級，
+// 一張簽好的授權沒有理由活五分鐘。
+//
+// ⚠ 這是**宣告**，不是強制：2026-09-17 實測 x402.org/facilitator 只檢查
+// validBefore >= now+6，不檢查上界（validBefore = now+30 天照樣通過時間檢查）。
+// 見 docs/KNOWN_LIMITATIONS.md §15 與 signal-api/scripts/probe-facilitator.ts。
+export const MAX_TIMEOUT_SECONDS = 60;
 
 // 免費 demo 的預設分析對象：當未帶 trader、未設 DEMO_TRADER_ADDRESS 且鏈上
 // registry 尚無註冊 trader 時，退回這個已知有鏈上活動的地址（treasury/deployer），
@@ -190,8 +200,39 @@ const CORS_ALLOWED_ORIGINS = (
   .map((s) => s.trim().replace(/\/$/, ""))
   .filter(Boolean);
 
-export function createApp(): Hono {
-  const app = new Hono();
+// facilitator 失敗的分類。只認得出來的才轉換，其餘回 null 交還原本的錯誤路徑
+// ——不要把「我們自己的 bug」也包裝成「facilitator 掛了」。
+const FACILITATOR_RETRY_AFTER_SEC = 5;
+export function classifyFacilitatorFailure(message: string | undefined): {
+  status: 429 | 502;
+  body: Record<string, unknown>;
+  headers: Record<string, string>;
+} | null {
+  if (!message) return null;
+  const note = "未扣款：付款授權尚未被 facilitator 結算，可用同一個請求重試（會重新簽一張授權）。";
+  if (/too many requests|rate.?limit|\b429\b/i.test(message)) {
+    return {
+      status: 429,
+      body: { ok: false, error: "facilitator_rate_limited", message, note, facilitator: FACILITATOR_URL },
+      headers: { "Retry-After": String(FACILITATOR_RETRY_AFTER_SEC) },
+    };
+  }
+  if (/^Failed to verify payment|fetch failed|ECONNRESET|ETIMEDOUT|ENOTFOUND/i.test(message)) {
+    return {
+      status: 502,
+      body: { ok: false, error: "facilitator_unavailable", message, note, facilitator: FACILITATOR_URL },
+      headers: {},
+    };
+  }
+  return null;
+}
+
+// Hono Context 變數：handler 用 c.set("ledgerEntry", …) 留下這筆該記多少帳，
+// 由付費牆外層的 middleware 在確認收到款後讀出來、推進結算佇列（見下）。
+type AppVariables = { ledgerEntry?: LedgerEntry };
+
+export function createApp(): Hono<{ Variables: AppVariables }> {
+  const app = new Hono<{ Variables: AppVariables }>();
 
   // GET 資料端點對所有來源開放（瀏覽器 demo + 外部 agent 都要用）。
   app.use("*", cors({ origin: "*", allowMethods: ["GET", "POST", "OPTIONS"] }));
@@ -244,12 +285,14 @@ export function createApp(): Hono {
       // 誠實描述金流：x402 的付款直接進 payTo，70/20/10 是平台事後另外送的一筆
       // 交易。把兩者寫成同一件事會讓讀者以為買方付的那筆錢就是被分潤的那筆錢。
       revenueModel:
-        `x402 付款直接進 payTo（${PAY_TO}）；70/20/10 分潤由平台另行透過 ` +
-        `FeeRouter.routeExternalRevenue 上鏈結算，累計可於 /revenue 查詢。` +
-        `兩者是不同的兩筆交易。`,
+        `x402 付款直接進 payTo（${PAY_TO}）；70/20/10 分潤是平台另外的一筆交易，` +
+        `經 FeeRouter.routeExternalRevenue 上鏈，累計可於 /revenue 查詢。` +
+        `兩者是不同的兩筆交易。` +
+        `2026-09-17 起分潤改為非同步：回應裡的 settled 代表「已排入結算佇列」，` +
+        `不代表已經上鏈；由單一 worker 定期批次結算（見 docs/KNOWN_LIMITATIONS.md §14）。`,
       endpoints: {
         "GET /signals/:trader": { price: `$${PRICE_SIGNALS}`, paid: true, desc: "trader 績效 + 開倉建議" },
-        "GET /oracle/:asset": { price: `$${PRICE_ORACLE}`, paid: true, desc: "決策級快照：價格 / funding / OI 失衡 / 預估清算價 / edge 建議（long·short·no_trade）。與 /signals 一樣會走 FeeRouter 70/20/10 結算並回 settlementTx" },
+        "GET /oracle/:asset": { price: `$${PRICE_ORACLE}`, paid: true, desc: "決策級快照：價格 / funding / OI 失衡 / 預估清算價 / edge 建議（long·short·no_trade）。與 /signals 一樣：收到款後把分潤記進結算佇列，回應帶 settled（是否成功排入佇列，不代表已上鏈）" },
         "GET /revenue": { price: "free", desc: "鏈上 70/20/10 累計（可選 ?trader=）" },
         "GET /candles/:symbol": {
           price: "free",
@@ -529,42 +572,110 @@ export function createApp(): Hono {
   });
 
   // ── x402 付費牆：保護兩個 GET 端點 ──────────────────────────────────────
-  app.use(
-    paymentMiddleware(
-      PAY_TO as `0x${string}`,
-      {
-        "GET /signals/[trader]": {
-          price: `$${PRICE_SIGNALS}`,
-          network: NETWORK,
-          config: { description: "Trader 即時績效摘要 + 開倉建議" },
-        },
-        "GET /oracle/[asset]": {
-          price: `$${PRICE_ORACLE}`,
-          network: NETWORK,
-          config: { description: "決策級快照：價格 + funding + OI 失衡 + 預估清算價 + edge 建議" },
+  //
+  // 包一層是為了 facilitator 本身出錯的情況（見 docs/KNOWN_LIMITATIONS.md §16）。
+  // x402-hono 0.5.3 對 /verify 的非 200 回應是直接 throw（`Failed to verify payment:
+  // <statusText>`），沒有 catch —— 於是 facilitator 限流時買方拿到的是 Hono 的通用
+  // 500，看不出是誰的問題、該不該重試。這裡把它轉成明確的 429 / 502。
+  const x402 = paymentMiddleware(
+    PAY_TO as `0x${string}`,
+    {
+      "GET /signals/[trader]": {
+        price: `$${PRICE_SIGNALS}`,
+        network: NETWORK,
+        config: { description: "Trader 即時績效摘要 + 開倉建議", maxTimeoutSeconds: MAX_TIMEOUT_SECONDS },
+      },
+      "GET /oracle/[asset]": {
+        price: `$${PRICE_ORACLE}`,
+        network: NETWORK,
+        config: {
+          description: "決策級快照：價格 + funding + OI 失衡 + 預估清算價 + edge 建議",
+          maxTimeoutSeconds: MAX_TIMEOUT_SECONDS,
         },
       },
-      { url: FACILITATOR_URL as `${string}://${string}` },
-    ),
+    },
+    { url: FACILITATOR_URL as `${string}://${string}` },
   );
+  app.use(async (c, next) => {
+    let res: Response | void;
+    try {
+      // 必須接住回傳值：付費牆在 402 時是 **return** 一個 Response，不是寫進 c.res。
+      res = await x402(c, next);
+    } catch (err) {
+      const f = classifyFacilitatorFailure((err as Error)?.message);
+      if (!f) throw err;
+      return c.json(f.body, f.status, f.headers);
+    }
+    if (res) c.res = res;
+    // facilitator 以 200 + isValid:false 回報限流（CDP 的 `rate_limit_exceeded`
+    // 就是這個形狀）時，x402-hono 會把 invalidReason 原樣塞進 402 的 error。
+    // 402 對 x402 client 的意思是「請付款」，會讓它對一個根本沒問題的簽章重簽重送。
+    if (c.res.status === 402 && c.req.header("X-PAYMENT")) {
+      const body = (await c.res.clone().json().catch(() => null)) as { error?: unknown } | null;
+      const f = typeof body?.error === "string" ? classifyFacilitatorFailure(body.error) : null;
+      if (f?.status === 429) c.res = c.json(f.body, f.status, f.headers);
+    }
+
+    // ── 優先序 1：記帳，不結算 ──────────────────────────────────────────────
+    //
+    // handler 只在 c.set("ledgerEntry", …) 留下「這筆該分潤多少」；handler 執行時
+    // facilitator 的 /settle 還沒發生（x402-hono 先 next() 再 settle），所以這裡
+    // 才是第一個知道「錢真的收到了沒有」的地方——`X-PAYMENT-RESPONSE` header 只有
+    // facilitator settle 成功時才會被設定。settle 失敗時 x402-hono 會把 c.res 整個
+    // 換成 402，這個 middleware 看到的 res 就不會帶那個 header，也就不會走進這裡
+    // ——買方沒被扣款，我們就不能記一筆分潤（這正是舊版「先記帳後結算失敗」那個
+    // 順序問題的修法：把「記帳」的時間點往後移到「確定收到錢」之後）。
+    const entry = c.get("ledgerEntry");
+    if (entry && c.res.status < 400 && c.res.headers.has("X-PAYMENT-RESPONSE")) {
+      let settleError: string | undefined;
+      let queued = false;
+      if (!isLedgerEnabled()) {
+        settleError =
+          "settlement disabled：未設定 UPSTASH_REDIS_REST_URL / UPSTASH_REDIS_REST_TOKEN" +
+          "（僅保留鏈下帳務 /revenue）";
+      } else {
+        try {
+          // 必須 await：serverless 不保證回應後還能背景跑，fire-and-forget 會被砍掉
+          // ——跟這份檔案開頭那條舊註解講的是同一件事，只是現在等的是一次 KV 寫入
+          // （通常 <150ms），不再是一筆鏈上交易的 tx.wait()（≥2 秒起跳）。
+          await enqueueSettlement(entry);
+          queued = true;
+        } catch (err) {
+          settleError = (err as Error).message;
+          // 買方已經拿到資料且已扣款，這筆分潤紀錄卻可能遺失——沒有其他地方會
+          // 保留這筆待結算的原始資料，所以至少留在 log 裡供人工回補。
+          console.error(`[ledger] enqueue 失敗，entry 可能遺失：${JSON.stringify(entry)}`, err);
+        }
+      }
+      // `settled` 語意變更：現在代表「已排入結算佇列」，不代表已上鏈。
+      // 見 docs/KNOWN_LIMITATIONS.md §14。
+      const body = (await c.res.clone().json()) as Record<string, unknown>;
+      const headers = new Headers(c.res.headers);
+      c.res = new Response(
+        JSON.stringify({ ...body, settled: queued, settleError }),
+        { status: c.res.status, headers },
+      );
+    }
+  });
 
   // ── 付費後才會執行到這裡 ─────────────────────────────────────────────────
+  //
+  // 兩個 handler 都不再上鏈結算：只留下 c.set("ledgerEntry", …)，實際記帳（推進
+  // Upstash 佇列）與是否成功都由上面那個 middleware 在 facilitator settle 確定
+  // 成功後處理，並改寫這裡回傳的 JSON 補上 settled/settleError（見上）。
   app.get("/signals/:trader", async (c) => {
     const trader = c.req.param("trader");
     try {
       const perf = await getTraderPerformance(contracts, trader);
-      // serverless：在回應前 await 結算，並把 tx 一起回（沿用幣別守衛）。
-      let settlementTx: string | undefined;
-      let settleError: string | undefined;
-      if (isSettlementEnabled()) {
-        const r = await settleRevenue(trader, PRICE_SIGNALS);
-        if (r.status === "settled") settlementTx = r.tx;
-        else settleError = r.error;
-      }
-      // 付費者已拿到訊號（ok:true）；`settled` 讓消費端能偵測「付了但分潤未上鏈」。
-      return c.json(
-        jsonSafe({ ok: true, settled: !!settlementTx, data: perf, settlementTx, settleError }),
-      );
+      c.set("ledgerEntry", {
+        trader,
+        feeUsd: PRICE_SIGNALS,
+        at: Math.floor(Date.now() / 1000),
+        source: "signals",
+      } satisfies LedgerEntry);
+      // settled/settleError 由上層 middleware 補上；這裡先給預設值，避免回應
+      // 形狀在 middleware 沒跑到的路徑（理論上不會，防禦性寫法）下缺欄位。
+      return c.json(jsonSafe({ ok: true, settled: false, data: perf }));
     } catch (err) {
       return c.json({ ok: false, error: (err as Error).message }, 400);
     }
@@ -576,22 +687,15 @@ export function createApp(): Hono {
       const snap = await getOracleSnapshot(contracts, asset);
       // 稽核（四·Medium）：/oracle 以前**完全沒有結算** —— 自主 agent 打的正是這個
       // 端點，那筆錢從未進 FeeRouter，而 `GET /` 卻宣稱 70/20/10。現在與 /signals
-      // 一致：回應前 await routeExternalRevenue，並把 tx 一起回傳。
-      let settlementTx: string | undefined;
-      let settleError: string | undefined;
-      if (isSettlementEnabled()) {
-        try {
-          const beneficiary = await resolveTrader();
-          const r = await settleRevenue(beneficiary, PRICE_ORACLE);
-          if (r.status === "settled") settlementTx = r.tx;
-          else settleError = r.error;
-        } catch (e) {
-          settleError = (e as Error).message;
-        }
-      }
-      return c.json(
-        jsonSafe({ ok: true, settled: !!settlementTx, data: snap, settlementTx, settleError }),
-      );
+      // 一致：留下 ledgerEntry，交由 middleware 在確認收到款後記帳。
+      const beneficiary = await resolveTrader();
+      c.set("ledgerEntry", {
+        trader: beneficiary,
+        feeUsd: PRICE_ORACLE,
+        at: Math.floor(Date.now() / 1000),
+        source: "oracle",
+      } satisfies LedgerEntry);
+      return c.json(jsonSafe({ ok: true, settled: false, data: snap }));
     } catch (err) {
       return c.json({ ok: false, error: (err as Error).message }, 400);
     }

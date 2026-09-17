@@ -15033,16 +15033,16 @@ var BASE_SEPOLIA = {
   TraderStake: "0x01aEB530bcFc69f036309ffe55acc7eA6C5a28Fe",
   InsuranceVault: "0xB364E2e3e1e7a2b033eF03a4ACceF42066F3D812",
   FeeRouter: "0x00f6cf0113399a7A451c7f85fe094a28092d3e0c",
-  PerpetualExchange: "0xfAEf549C687C37064cEaB5728989a839B08955cf",
-  StrategyRegistry: "0xB92A47fb7E0AE7b87E159cCf56e98cB40f9c0539",
-  CopyTracker: "0x8c35FA2967b3cC716940656a510b2aCa4e1b5b7D",
+  PerpetualExchange: "0x827eA0c62a32e995927101259042F8A27D99124D",
+  StrategyRegistry: "0xA103de184A5C76d7b70fB4e908F252199e004b95",
+  CopyTracker: "0xC9e91f7D36e910C58042164032c625427b23CCB2",
   MockSwapRouter: "0xC9b0e5C219AA1B3eB00E92Fd9a883B182F0AE8Ae",
-  ESGRegistry: "0x285C16bf8160bD1343a9409445a4Ad4A8C5E2879",
+  ESGRegistry: "0xBF5B9cD78566791d79c687A732b4ed5bc3E95dFf",
   KYCRegistry: "0x5D95fD9e7a5f80E5369e24783F1f98E0f952360d",
   PepeAMM: "0x93be44a81a2796d378f65ebcc8d5f8b40166ad63",
   PepeToken: "0xccd05cbdc2f7961a4c27d3633694022722786a0f",
   PepeClaim: "0x459d238aC61eC4A0E08608FBcd363227B860CF34",
-  EsgRewardDistributor: "0xceD347341eF54046352E05f5fec70DD6F5D23150",
+  EsgRewardDistributor: "0x44a8E5195E168e5AdcCa4343Bd8B399B49D5609F",
   PepeIncentives: "0xEBfA1dc7dDea032ac6242cB619d982e543A23c12",
   PepeStaking: "0xC78D68cA1B217ba241c23Ebad3118c6ec0dc0D34",
   AssetVault: "0xC30DFe1C9EBb47197b785995aA9Cd0F5B89557A5"
@@ -46195,12 +46195,12 @@ function parseUrl(url_) {
     const url = new URL(url_);
     const result = (() => {
       if (url.username) {
-        const credentials = `${decodeURIComponent(url.username)}:${decodeURIComponent(url.password)}`;
+        const credentials2 = `${decodeURIComponent(url.username)}:${decodeURIComponent(url.password)}`;
         url.username = "";
         url.password = "";
         return {
           url: url.toString(),
-          headers: { Authorization: `Basic ${btoa(credentials)}` }
+          headers: { Authorization: `Basic ${btoa(credentials2)}` }
         };
       }
       return;
@@ -59802,65 +59802,38 @@ function isSettlementEnabled() {
   return wallet !== null;
 }
 var queue = Promise.resolve();
-function settleRevenue(trader, feeUsd) {
-  const run = queue.then(() => _settle(trader, feeUsd));
-  queue = run.catch(() => void 0);
-  return run;
+
+// src/ledger.ts
+function credentials() {
+  const url = process.env.UPSTASH_REDIS_REST_URL?.trim();
+  const token = process.env.UPSTASH_REDIS_REST_TOKEN?.trim();
+  return url && token ? { url, token } : null;
 }
-var currencyChecked = false;
-async function _assertCurrencyMatch() {
-  if (currencyChecked) return null;
-  try {
-    const routerUsdc = await feeRouter.usdc();
-    if (routerUsdc.toLowerCase() !== SETTLEMENT_TOKEN.toLowerCase()) {
-      return `\u7D50\u7B97\u5E63\u5225\u4E0D\u7B26\uFF1AX402_SETTLEMENT_TOKEN=${SETTLEMENT_TOKEN} \u4F46 X402_FEE_ROUTER.usdc()=${routerUsdc}\u3002\u8ACB\u5148\u7528 DeployX402Router.s.sol \u90E8\u7F72\u5B98\u65B9 USDC \u7684 FeeRouter \u4E26\u628A\u4F4D\u5740\u586B\u9032 X402_FEE_ROUTER\uFF08\u898B .env.example\uFF09\u3002`;
-    }
-    currencyChecked = true;
-    return null;
-  } catch (err) {
-    return `\u7121\u6CD5\u8B80\u53D6 FeeRouter.usdc()\uFF08\u4F4D\u5740\u932F\u8AA4\uFF1F\uFF09\uFF1A${err.message}`;
-  }
+var QUEUE_KEY = "x402:settlement:queue";
+function isLedgerEnabled() {
+  return credentials() !== null;
 }
-async function _settle(trader, feeUsd) {
-  if (!wallet || !feeRouter || !usdc) {
-    return { status: "failed", error: "settlement disabled" };
+async function command(cmd) {
+  const creds = credentials();
+  if (!creds) {
+    throw new Error("ledger disabled\uFF1A\u672A\u8A2D\u5B9A UPSTASH_REDIS_REST_URL / UPSTASH_REDIS_REST_TOKEN");
   }
-  const mismatch = await _assertCurrencyMatch();
-  if (mismatch) return { status: "failed", error: mismatch };
-  try {
-    const decimals = Number(await usdc.decimals());
-    const atomic = ethers_exports.parseUnits(feeUsd.toString(), decimals);
-    const me = wallet.address;
-    const bal = await usdc.balanceOf(me);
-    if (bal < atomic) {
-      const mintable = SETTLEMENT_TOKEN.toLowerCase() === MINTABLE_MOCK_USDC.toLowerCase();
-      if (!mintable) {
-        return {
-          status: "failed",
-          error: `\u7D50\u7B97 token \u9918\u984D\u4E0D\u8DB3\uFF08${SETTLEMENT_TOKEN}\uFF0C\u975E\u53EF\u9444\u5E63\u7684 MockUSDC\uFF09\u3002treasury \u9700\u5148\u6536\u5230 x402 \u4ED8\u6B3E\u7684 USDC\u3002`
-        };
-      }
-      try {
-        const mintTx = await usdc.mint(me, atomic * 1000n);
-        await mintTx.wait();
-      } catch (e) {
-        return {
-          status: "failed",
-          error: `MockUSDC \u9444\u5E63\u5931\u6557\uFF1A${e.message}`
-        };
-      }
-    }
-    const allowance = await usdc.allowance(me, SETTLEMENT_ROUTER);
-    if (allowance < atomic) {
-      const apTx = await usdc.approve(SETTLEMENT_ROUTER, ethers_exports.MaxUint256);
-      await apTx.wait();
-    }
-    const tx = await feeRouter.routeExternalRevenue(trader, atomic);
-    await tx.wait();
-    return { status: "settled", tx: tx.hash };
-  } catch (err) {
-    return { status: "failed", error: err.message };
+  const res = await fetch(creds.url, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${creds.token}`,
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify(cmd)
+  });
+  const body = await res.json();
+  if (!res.ok || body.error) {
+    throw new Error(`Upstash ${cmd[0]} \u5931\u6557\uFF1A${body.error ?? res.statusText}`);
   }
+  return body.result;
+}
+async function enqueueSettlement(entry) {
+  await command(["RPUSH", QUEUE_KEY, JSON.stringify(entry)]);
 }
 
 // src/onchainRevenue.ts
@@ -60569,6 +60542,7 @@ var PAY_TO = resolvePayTo(ADDRESSES.FeeRouter);
 var SETTLEMENT_TOKEN2 = resolveSettlementToken();
 var PRICE_SIGNALS = 0.01;
 var PRICE_ORACLE = 5e-3;
+var MAX_TIMEOUT_SECONDS = 60;
 var DEFAULT_DEMO_TRADER = "0xE80A81360608C1342e66743F70a00f75d792Eb93";
 var provider = makeProvider();
 var contracts2 = makeContracts(provider);
@@ -60652,6 +60626,26 @@ function freeRateLimited(ip) {
   return { limited: false, retryAfterSec: 0 };
 }
 var CORS_ALLOWED_ORIGINS = (process.env.CORS_ALLOWED_ORIGINS ?? "http://localhost:5173,http://localhost:4173,https://pepelab-onchain-cfd-djot.vercel.app").split(",").map((s) => s.trim().replace(/\/$/, "")).filter(Boolean);
+var FACILITATOR_RETRY_AFTER_SEC = 5;
+function classifyFacilitatorFailure(message) {
+  if (!message) return null;
+  const note = "\u672A\u6263\u6B3E\uFF1A\u4ED8\u6B3E\u6388\u6B0A\u5C1A\u672A\u88AB facilitator \u7D50\u7B97\uFF0C\u53EF\u7528\u540C\u4E00\u500B\u8ACB\u6C42\u91CD\u8A66\uFF08\u6703\u91CD\u65B0\u7C3D\u4E00\u5F35\u6388\u6B0A\uFF09\u3002";
+  if (/too many requests|rate.?limit|\b429\b/i.test(message)) {
+    return {
+      status: 429,
+      body: { ok: false, error: "facilitator_rate_limited", message, note, facilitator: FACILITATOR_URL },
+      headers: { "Retry-After": String(FACILITATOR_RETRY_AFTER_SEC) }
+    };
+  }
+  if (/^Failed to verify payment|fetch failed|ECONNRESET|ETIMEDOUT|ENOTFOUND/i.test(message)) {
+    return {
+      status: 502,
+      body: { ok: false, error: "facilitator_unavailable", message, note, facilitator: FACILITATOR_URL },
+      headers: {}
+    };
+  }
+  return null;
+}
 function createApp() {
   const app2 = new Hono2();
   app2.use("*", cors({ origin: "*", allowMethods: ["GET", "POST", "OPTIONS"] }));
@@ -60689,10 +60683,10 @@ function createApp() {
       payTo: PAY_TO,
       // 誠實描述金流：x402 的付款直接進 payTo，70/20/10 是平台事後另外送的一筆
       // 交易。把兩者寫成同一件事會讓讀者以為買方付的那筆錢就是被分潤的那筆錢。
-      revenueModel: `x402 \u4ED8\u6B3E\u76F4\u63A5\u9032 payTo\uFF08${PAY_TO}\uFF09\uFF1B70/20/10 \u5206\u6F64\u7531\u5E73\u53F0\u53E6\u884C\u900F\u904E FeeRouter.routeExternalRevenue \u4E0A\u93C8\u7D50\u7B97\uFF0C\u7D2F\u8A08\u53EF\u65BC /revenue \u67E5\u8A62\u3002\u5169\u8005\u662F\u4E0D\u540C\u7684\u5169\u7B46\u4EA4\u6613\u3002`,
+      revenueModel: `x402 \u4ED8\u6B3E\u76F4\u63A5\u9032 payTo\uFF08${PAY_TO}\uFF09\uFF1B70/20/10 \u5206\u6F64\u662F\u5E73\u53F0\u53E6\u5916\u7684\u4E00\u7B46\u4EA4\u6613\uFF0C\u7D93 FeeRouter.routeExternalRevenue \u4E0A\u93C8\uFF0C\u7D2F\u8A08\u53EF\u65BC /revenue \u67E5\u8A62\u3002\u5169\u8005\u662F\u4E0D\u540C\u7684\u5169\u7B46\u4EA4\u6613\u30022026-09-17 \u8D77\u5206\u6F64\u6539\u70BA\u975E\u540C\u6B65\uFF1A\u56DE\u61C9\u88E1\u7684 settled \u4EE3\u8868\u300C\u5DF2\u6392\u5165\u7D50\u7B97\u4F47\u5217\u300D\uFF0C\u4E0D\u4EE3\u8868\u5DF2\u7D93\u4E0A\u93C8\uFF1B\u7531\u55AE\u4E00 worker \u5B9A\u671F\u6279\u6B21\u7D50\u7B97\uFF08\u898B docs/KNOWN_LIMITATIONS.md \xA714\uFF09\u3002`,
       endpoints: {
         "GET /signals/:trader": { price: `$${PRICE_SIGNALS}`, paid: true, desc: "trader \u7E3E\u6548 + \u958B\u5009\u5EFA\u8B70" },
-        "GET /oracle/:asset": { price: `$${PRICE_ORACLE}`, paid: true, desc: "\u6C7A\u7B56\u7D1A\u5FEB\u7167\uFF1A\u50F9\u683C / funding / OI \u5931\u8861 / \u9810\u4F30\u6E05\u7B97\u50F9 / edge \u5EFA\u8B70\uFF08long\xB7short\xB7no_trade\uFF09\u3002\u8207 /signals \u4E00\u6A23\u6703\u8D70 FeeRouter 70/20/10 \u7D50\u7B97\u4E26\u56DE settlementTx" },
+        "GET /oracle/:asset": { price: `$${PRICE_ORACLE}`, paid: true, desc: "\u6C7A\u7B56\u7D1A\u5FEB\u7167\uFF1A\u50F9\u683C / funding / OI \u5931\u8861 / \u9810\u4F30\u6E05\u7B97\u50F9 / edge \u5EFA\u8B70\uFF08long\xB7short\xB7no_trade\uFF09\u3002\u8207 /signals \u4E00\u6A23\uFF1A\u6536\u5230\u6B3E\u5F8C\u628A\u5206\u6F64\u8A18\u9032\u7D50\u7B97\u4F47\u5217\uFF0C\u56DE\u61C9\u5E36 settled\uFF08\u662F\u5426\u6210\u529F\u6392\u5165\u4F47\u5217\uFF0C\u4E0D\u4EE3\u8868\u5DF2\u4E0A\u93C8\uFF09" },
         "GET /revenue": { price: "free", desc: "\u93C8\u4E0A 70/20/10 \u7D2F\u8A08\uFF08\u53EF\u9078 ?trader=\uFF09" },
         "GET /candles/:symbol": {
           price: "free",
@@ -60901,38 +60895,74 @@ function createApp() {
     }
     return next();
   });
-  app2.use(
-    paymentMiddleware(
-      PAY_TO,
-      {
-        "GET /signals/[trader]": {
-          price: `$${PRICE_SIGNALS}`,
-          network: NETWORK,
-          config: { description: "Trader \u5373\u6642\u7E3E\u6548\u6458\u8981 + \u958B\u5009\u5EFA\u8B70" }
-        },
-        "GET /oracle/[asset]": {
-          price: `$${PRICE_ORACLE}`,
-          network: NETWORK,
-          config: { description: "\u6C7A\u7B56\u7D1A\u5FEB\u7167\uFF1A\u50F9\u683C + funding + OI \u5931\u8861 + \u9810\u4F30\u6E05\u7B97\u50F9 + edge \u5EFA\u8B70" }
-        }
+  const x402 = paymentMiddleware(
+    PAY_TO,
+    {
+      "GET /signals/[trader]": {
+        price: `$${PRICE_SIGNALS}`,
+        network: NETWORK,
+        config: { description: "Trader \u5373\u6642\u7E3E\u6548\u6458\u8981 + \u958B\u5009\u5EFA\u8B70", maxTimeoutSeconds: MAX_TIMEOUT_SECONDS }
       },
-      { url: FACILITATOR_URL }
-    )
+      "GET /oracle/[asset]": {
+        price: `$${PRICE_ORACLE}`,
+        network: NETWORK,
+        config: {
+          description: "\u6C7A\u7B56\u7D1A\u5FEB\u7167\uFF1A\u50F9\u683C + funding + OI \u5931\u8861 + \u9810\u4F30\u6E05\u7B97\u50F9 + edge \u5EFA\u8B70",
+          maxTimeoutSeconds: MAX_TIMEOUT_SECONDS
+        }
+      }
+    },
+    { url: FACILITATOR_URL }
   );
+  app2.use(async (c, next) => {
+    let res;
+    try {
+      res = await x402(c, next);
+    } catch (err) {
+      const f2 = classifyFacilitatorFailure(err?.message);
+      if (!f2) throw err;
+      return c.json(f2.body, f2.status, f2.headers);
+    }
+    if (res) c.res = res;
+    if (c.res.status === 402 && c.req.header("X-PAYMENT")) {
+      const body = await c.res.clone().json().catch(() => null);
+      const f2 = typeof body?.error === "string" ? classifyFacilitatorFailure(body.error) : null;
+      if (f2?.status === 429) c.res = c.json(f2.body, f2.status, f2.headers);
+    }
+    const entry = c.get("ledgerEntry");
+    if (entry && c.res.status < 400 && c.res.headers.has("X-PAYMENT-RESPONSE")) {
+      let settleError;
+      let queued = false;
+      if (!isLedgerEnabled()) {
+        settleError = "settlement disabled\uFF1A\u672A\u8A2D\u5B9A UPSTASH_REDIS_REST_URL / UPSTASH_REDIS_REST_TOKEN\uFF08\u50C5\u4FDD\u7559\u93C8\u4E0B\u5E33\u52D9 /revenue\uFF09";
+      } else {
+        try {
+          await enqueueSettlement(entry);
+          queued = true;
+        } catch (err) {
+          settleError = err.message;
+          console.error(`[ledger] enqueue \u5931\u6557\uFF0Centry \u53EF\u80FD\u907A\u5931\uFF1A${JSON.stringify(entry)}`, err);
+        }
+      }
+      const body = await c.res.clone().json();
+      const headers = new Headers(c.res.headers);
+      c.res = new Response(
+        JSON.stringify({ ...body, settled: queued, settleError }),
+        { status: c.res.status, headers }
+      );
+    }
+  });
   app2.get("/signals/:trader", async (c) => {
     const trader = c.req.param("trader");
     try {
       const perf = await getTraderPerformance(contracts2, trader);
-      let settlementTx;
-      let settleError;
-      if (isSettlementEnabled()) {
-        const r = await settleRevenue(trader, PRICE_SIGNALS);
-        if (r.status === "settled") settlementTx = r.tx;
-        else settleError = r.error;
-      }
-      return c.json(
-        jsonSafe({ ok: true, settled: !!settlementTx, data: perf, settlementTx, settleError })
-      );
+      c.set("ledgerEntry", {
+        trader,
+        feeUsd: PRICE_SIGNALS,
+        at: Math.floor(Date.now() / 1e3),
+        source: "signals"
+      });
+      return c.json(jsonSafe({ ok: true, settled: false, data: perf }));
     } catch (err) {
       return c.json({ ok: false, error: err.message }, 400);
     }
@@ -60941,21 +60971,14 @@ function createApp() {
     const asset = c.req.param("asset");
     try {
       const snap = await getOracleSnapshot(contracts2, asset);
-      let settlementTx;
-      let settleError;
-      if (isSettlementEnabled()) {
-        try {
-          const beneficiary = await resolveTrader();
-          const r = await settleRevenue(beneficiary, PRICE_ORACLE);
-          if (r.status === "settled") settlementTx = r.tx;
-          else settleError = r.error;
-        } catch (e) {
-          settleError = e.message;
-        }
-      }
-      return c.json(
-        jsonSafe({ ok: true, settled: !!settlementTx, data: snap, settlementTx, settleError })
-      );
+      const beneficiary = await resolveTrader();
+      c.set("ledgerEntry", {
+        trader: beneficiary,
+        feeUsd: PRICE_ORACLE,
+        at: Math.floor(Date.now() / 1e3),
+        source: "oracle"
+      });
+      return c.json(jsonSafe({ ok: true, settled: false, data: snap }));
     } catch (err) {
       return c.json({ ok: false, error: err.message }, 400);
     }
