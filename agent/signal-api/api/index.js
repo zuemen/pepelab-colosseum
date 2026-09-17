@@ -60646,6 +60646,30 @@ function classifyFacilitatorFailure(message) {
   }
   return null;
 }
+async function applyLedgerRecording(entry, res) {
+  if (!entry || res.status >= 400 || !res.headers.has("X-PAYMENT-RESPONSE")) {
+    return res;
+  }
+  let settleError;
+  let queued = false;
+  if (!isLedgerEnabled()) {
+    settleError = "settlement disabled\uFF1A\u672A\u8A2D\u5B9A UPSTASH_REDIS_REST_URL / UPSTASH_REDIS_REST_TOKEN\uFF08\u50C5\u4FDD\u7559\u93C8\u4E0B\u5E33\u52D9 /revenue\uFF09";
+  } else {
+    try {
+      await enqueueSettlement(entry);
+      queued = true;
+    } catch (err) {
+      settleError = err.message;
+      console.error(`[ledger] enqueue \u5931\u6557\uFF0Centry \u53EF\u80FD\u907A\u5931\uFF1A${JSON.stringify(entry)}`, err);
+    }
+  }
+  const body = await res.clone().json();
+  const headers = new Headers(res.headers);
+  return new Response(JSON.stringify({ ...body, settled: queued, settleError }), {
+    status: res.status,
+    headers
+  });
+}
 function createApp() {
   const app2 = new Hono2();
   app2.use("*", cors({ origin: "*", allowMethods: ["GET", "POST", "OPTIONS"] }));
@@ -60929,28 +60953,7 @@ function createApp() {
       const f2 = typeof body?.error === "string" ? classifyFacilitatorFailure(body.error) : null;
       if (f2?.status === 429) c.res = c.json(f2.body, f2.status, f2.headers);
     }
-    const entry = c.get("ledgerEntry");
-    if (entry && c.res.status < 400 && c.res.headers.has("X-PAYMENT-RESPONSE")) {
-      let settleError;
-      let queued = false;
-      if (!isLedgerEnabled()) {
-        settleError = "settlement disabled\uFF1A\u672A\u8A2D\u5B9A UPSTASH_REDIS_REST_URL / UPSTASH_REDIS_REST_TOKEN\uFF08\u50C5\u4FDD\u7559\u93C8\u4E0B\u5E33\u52D9 /revenue\uFF09";
-      } else {
-        try {
-          await enqueueSettlement(entry);
-          queued = true;
-        } catch (err) {
-          settleError = err.message;
-          console.error(`[ledger] enqueue \u5931\u6557\uFF0Centry \u53EF\u80FD\u907A\u5931\uFF1A${JSON.stringify(entry)}`, err);
-        }
-      }
-      const body = await c.res.clone().json();
-      const headers = new Headers(c.res.headers);
-      c.res = new Response(
-        JSON.stringify({ ...body, settled: queued, settleError }),
-        { status: c.res.status, headers }
-      );
-    }
+    c.res = await applyLedgerRecording(c.get("ledgerEntry"), c.res);
   });
   app2.get("/signals/:trader", async (c) => {
     const trader = c.req.param("trader");

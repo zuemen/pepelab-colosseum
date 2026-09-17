@@ -353,18 +353,48 @@ on-chain." It now means "queued; a worker will attempt it." A response can say
 the dead-letter list — the response is written before the worker ever runs.
 `GET /` states this in `revenueModel`.
 
-**Tested offline, not on testnet.** `ledgerFlow.test.ts` runs the paid routes
-through a stub facilitator and a stub Upstash server and checks: a successful
-facilitator settle queues exactly one entry with the right fields; a failed
-facilitator settle queues nothing; the response never depends on
-`FEE_SETTLEMENT_PRIVATE_KEY` being set at all (the test deliberately unsets it,
-so any accidental on-chain call would surface as a hang or a wrong result, not
-a silent pass). `settlementWorker.test.ts` drives the retry → dead-letter
-transition directly (also without `FEE_SETTLEMENT_PRIVATE_KEY`, so
-`settleRevenue` fails deterministically with `"settlement disabled"` and the
-test doesn't depend on a real chain being reachable). **Neither test has run
-against a live queue or a live signer.** The GitHub Actions workflow has not
-executed in production as of this writing — secrets are not yet set.
+**Tested offline, not on testnet — and the first version of this test was
+wrong.** The recording decision lives in `applyLedgerRecording()`, a pure
+function exported from `app.ts`: `(ledgerEntry, response) → response`. It reads
+nothing but its arguments and touches no contract, no provider, no `ethers`
+code at all — `ledgerFlow.test.ts` tests it directly with hand-built `Response`
+objects (a stub Upstash server behind it, to also prove the actual RPUSH
+happens). It checks: no entry → passthrough; entry but no
+`X-PAYMENT-RESPONSE` (facilitator settle didn't succeed) → not recorded; settle
+succeeded + ledger configured → exactly one queue entry with the right fields,
+`settled:true`; ledger not configured → data still returned, `settled:false`,
+`settleError` names the missing env; the Upstash write itself failing → same,
+data still returned, error surfaced rather than swallowed.
+
+The first version of this test went through the real `/signals` and `/oracle`
+handlers with a real (stub-driven) facilitator and asserted `200`. It passed
+locally and failed in CI — `getTraderPerformance`/`getOracleSnapshot` need a
+live Base Sepolia RPC to return real position/oracle data, and it only worked
+locally because this machine's `agent/.env` happened to have a working RPC URL
+already set from unrelated local dev. `agent-ci.yml` has no RPC configured
+(deliberately, per its own header comment: the point of that workflow is tests
+that need no keys and touch no network), so any request through those handlers
+always failed with 400 before the facilitator or the ledger were ever reached.
+The extraction above is the fix: it moved the thing actually being tested (the
+recording *decision*) out from behind the thing that can't run offline (the
+trading data fetch), instead of trying to fake a Base Sepolia RPC.
+
+`settlementWorker.test.ts` drives the retry → dead-letter transition directly,
+without `FEE_SETTLEMENT_PRIVATE_KEY` set, so `settleRevenue` fails
+deterministically with `"settlement disabled"` — no chain reachability needed
+there either. **Neither test has run against a live queue or a live signer.**
+As of this writing the GitHub Actions workflow has the four secrets it needs
+(`FEE_SETTLEMENT_PRIVATE_KEY`, `BASE_SEPOLIA_RPC_URL`, `UPSTASH_REDIS_REST_URL`,
+`UPSTASH_REDIS_REST_TOKEN`) but has not executed in production — GitHub
+Actions' `workflow_dispatch` API refuses to run a workflow that only exists on
+a feature branch (`HTTP 404: workflow ... not found on the default branch`),
+so the first real run will be either the first scheduled tick after this PR
+merges to `master`, or a manual dispatch right after that merge. A local run of
+`settlement-worker.ts` against the real Upstash instance and the real
+`FEE_SETTLEMENT_PRIVATE_KEY` signer did succeed (2026-09-17): it connected,
+read an empty queue, and exited 0 — the credentials work, there was just
+nothing to settle yet, since the deployed API is still running the pre-ledger
+code until this merges.
 
 **Left open:**
 

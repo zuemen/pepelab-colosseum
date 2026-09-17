@@ -231,6 +231,58 @@ export function classifyFacilitatorFailure(message: string | undefined): {
 // 由付費牆外層的 middleware 在確認收到款後讀出來、推進結算佇列（見下）。
 type AppVariables = { ledgerEntry?: LedgerEntry };
 
+/**
+ * 優先序 1（記帳 + 批次結算）的核心決策：純函式，只吃「這筆該記多少帳」跟
+ * 「付費牆處理完之後的 Response」，不碰 Hono context、不碰任何鏈上呼叫。
+ *
+ * 抽成純函式而不是留在 middleware 裡直接操作 c，是為了讓 ledgerFlow.test.ts
+ * 能繞開 /signals、/oracle 的真實 handler——那兩個 handler 會讀鏈上資料
+ * （getTraderPerformance/getOracleSnapshot），在沒有真的 Base Sepolia RPC 時
+ * （例如 CI）一定會失敗，跟這裡要驗證的「記帳邏輯本身對不對」是兩件事。
+ *
+ * @param entry handler 用 c.set("ledgerEntry", …) 留下的待分潤項目；沒有就代表
+ *              這個 request 不是走 /signals 或 /oracle，原樣放行。
+ * @param res   付費牆（含 facilitator settle）處理完之後的 Response。只有
+ *              status < 400 且帶 `X-PAYMENT-RESPONSE`（facilitator settle 真的
+ *              成功的證明）才會記帳；否則原樣回傳，不動它。
+ */
+export async function applyLedgerRecording(
+  entry: LedgerEntry | undefined,
+  res: Response,
+): Promise<Response> {
+  if (!entry || res.status >= 400 || !res.headers.has("X-PAYMENT-RESPONSE")) {
+    return res;
+  }
+  let settleError: string | undefined;
+  let queued = false;
+  if (!isLedgerEnabled()) {
+    settleError =
+      "settlement disabled：未設定 UPSTASH_REDIS_REST_URL / UPSTASH_REDIS_REST_TOKEN" +
+      "（僅保留鏈下帳務 /revenue）";
+  } else {
+    try {
+      // 必須 await：serverless 不保證回應後還能背景跑，fire-and-forget 會被砍掉
+      // ——跟這份檔案開頭那條舊註解講的是同一件事，只是現在等的是一次 KV 寫入
+      // （通常 <150ms），不再是一筆鏈上交易的 tx.wait()（≥2 秒起跳）。
+      await enqueueSettlement(entry);
+      queued = true;
+    } catch (err) {
+      settleError = (err as Error).message;
+      // 買方已經拿到資料且已扣款，這筆分潤紀錄卻可能遺失——沒有其他地方會
+      // 保留這筆待結算的原始資料，所以至少留在 log 裡供人工回補。
+      console.error(`[ledger] enqueue 失敗，entry 可能遺失：${JSON.stringify(entry)}`, err);
+    }
+  }
+  // `settled` 語意變更：現在代表「已排入結算佇列」，不代表已上鏈。
+  // 見 docs/KNOWN_LIMITATIONS.md §14。
+  const body = (await res.clone().json()) as Record<string, unknown>;
+  const headers = new Headers(res.headers);
+  return new Response(JSON.stringify({ ...body, settled: queued, settleError }), {
+    status: res.status,
+    headers,
+  });
+}
+
 export function createApp(): Hono<{ Variables: AppVariables }> {
   const app = new Hono<{ Variables: AppVariables }>();
 
@@ -625,37 +677,7 @@ export function createApp(): Hono<{ Variables: AppVariables }> {
     // 換成 402，這個 middleware 看到的 res 就不會帶那個 header，也就不會走進這裡
     // ——買方沒被扣款，我們就不能記一筆分潤（這正是舊版「先記帳後結算失敗」那個
     // 順序問題的修法：把「記帳」的時間點往後移到「確定收到錢」之後）。
-    const entry = c.get("ledgerEntry");
-    if (entry && c.res.status < 400 && c.res.headers.has("X-PAYMENT-RESPONSE")) {
-      let settleError: string | undefined;
-      let queued = false;
-      if (!isLedgerEnabled()) {
-        settleError =
-          "settlement disabled：未設定 UPSTASH_REDIS_REST_URL / UPSTASH_REDIS_REST_TOKEN" +
-          "（僅保留鏈下帳務 /revenue）";
-      } else {
-        try {
-          // 必須 await：serverless 不保證回應後還能背景跑，fire-and-forget 會被砍掉
-          // ——跟這份檔案開頭那條舊註解講的是同一件事，只是現在等的是一次 KV 寫入
-          // （通常 <150ms），不再是一筆鏈上交易的 tx.wait()（≥2 秒起跳）。
-          await enqueueSettlement(entry);
-          queued = true;
-        } catch (err) {
-          settleError = (err as Error).message;
-          // 買方已經拿到資料且已扣款，這筆分潤紀錄卻可能遺失——沒有其他地方會
-          // 保留這筆待結算的原始資料，所以至少留在 log 裡供人工回補。
-          console.error(`[ledger] enqueue 失敗，entry 可能遺失：${JSON.stringify(entry)}`, err);
-        }
-      }
-      // `settled` 語意變更：現在代表「已排入結算佇列」，不代表已上鏈。
-      // 見 docs/KNOWN_LIMITATIONS.md §14。
-      const body = (await c.res.clone().json()) as Record<string, unknown>;
-      const headers = new Headers(c.res.headers);
-      c.res = new Response(
-        JSON.stringify({ ...body, settled: queued, settleError }),
-        { status: c.res.status, headers },
-      );
-    }
+    c.res = await applyLedgerRecording(c.get("ledgerEntry"), c.res);
   });
 
   // ── 付費後才會執行到這裡 ─────────────────────────────────────────────────

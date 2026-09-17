@@ -1,45 +1,21 @@
-// 優先序 1（x402 硬化：記帳 + 批次結算）的端到端離線測試。
+// 優先序 1（x402 硬化：記帳 + 批次結算）的離線測試。
 //   cd agent && npx tsx signal-api/src/ledgerFlow.test.ts
 //
-// 用兩個本機 stub 取代 facilitator 與 Upstash，全程不打網路、不碰鏈上——關鍵是
-// 這個測試**完全不設 FEE_SETTLEMENT_PRIVATE_KEY**：如果付費端點的回應路徑還殘留
-// 任何一次鏈上呼叫，這裡就不會通過（因為沒有 signer，settleRevenue() 一被呼叫
-// 就會回 "settlement disabled"，而這裡驗證的是它**根本不會被呼叫**）。
+// 直接測 app.ts 匯出的 applyLedgerRecording（純函式：entry + Response → Response），
+// 不透過 /signals、/oracle 的真實 handler。那兩個 handler 會讀鏈上資料
+// （getTraderPerformance / getOracleSnapshot），沒有真的 Base Sepolia RPC 時
+// 一定會失敗——CI（.github/workflows/agent-ci.yml）就是這種環境，
+// 而 applyLedgerRecording 本身要驗證的「記帳邏輯對不對」跟「鏈上資料抓不抓得到」
+// 是兩件事，這裡只測前者。用真的 Upstash 形狀的 stub 驗證持久化那一步。
+//
+// 這個測試完全不 import ../src/app.ts 的 createApp、完全不碰任何合約/ethers
+// 相關程式碼——這是「付費回應路徑的記帳邏輯本身不依賴任何鏈上呼叫」最直接的證明：
+// 這裡連 provider 都沒建過。
 import assert from "node:assert";
 import { createServer, type Server } from "node:http";
 import type { AddressInfo } from "node:net";
 
-// ── stub facilitator：/verify 一律通過，/settle 依 settleMode 決定成敗 ────────
-let settleMode: "success" | "fail" = "success";
-const facilitator: Server = createServer(async (req, res) => {
-  const chunks: Buffer[] = [];
-  for await (const c of req) chunks.push(c as Buffer);
-  const body = JSON.parse(Buffer.concat(chunks).toString() || "{}") as {
-    paymentPayload?: { payload?: { authorization?: { from?: string } } };
-  };
-  const payer = body.paymentPayload?.payload?.authorization?.from ?? "0x0";
-  if (req.url === "/verify") {
-    res.writeHead(200, { "Content-Type": "application/json" }).end(JSON.stringify({ isValid: true, payer }));
-    return;
-  }
-  if (req.url === "/settle") {
-    if (settleMode === "success") {
-      res
-        .writeHead(200, { "Content-Type": "application/json" })
-        .end(JSON.stringify({ success: true, transaction: "0x" + "ab".repeat(32), network: "base-sepolia", payer }));
-    } else {
-      res
-        .writeHead(200, { "Content-Type": "application/json" })
-        .end(JSON.stringify({ success: false, errorReason: "simulated_settle_failure", transaction: "", network: "base-sepolia", payer }));
-    }
-    return;
-  }
-  res.writeHead(404).end();
-});
-await new Promise<void>((r) => facilitator.listen(0, "127.0.0.1", r));
-const facilitatorPort = (facilitator.address() as AddressInfo).port;
-
-// ── stub Upstash REST：只認 RPUSH / LPOP / LLEN，維護記憶體內的 list ─────────
+// ── stub Upstash REST：只認 RPUSH，維護記憶體內的 list ───────────────────────
 const lists = new Map<string, string[]>();
 function listFor(key: string): string[] {
   let l = lists.get(key);
@@ -49,131 +25,132 @@ function listFor(key: string): string[] {
   }
   return l;
 }
+let upstashDown = false;
 const upstash: Server = createServer(async (req, res) => {
+  if (upstashDown) {
+    res.destroy(); // 模擬連線失敗（不是 HTTP 錯誤，是連不上）
+    return;
+  }
   const chunks: Buffer[] = [];
   for await (const c of req) chunks.push(c as Buffer);
   const [cmd, key, ...args] = JSON.parse(Buffer.concat(chunks).toString() || "[]") as (string | number)[];
   const ok = (result: unknown) => res.writeHead(200, { "Content-Type": "application/json" }).end(JSON.stringify({ result }));
-  const cmdU = String(cmd).toUpperCase();
-  if (cmdU === "RPUSH") {
+  if (String(cmd).toUpperCase() === "RPUSH") {
     listFor(String(key)).push(String(args[0]));
     ok(listFor(String(key)).length);
-  } else if (cmdU === "LPOP") {
-    const count = args[0] !== undefined ? Number(args[0]) : 1;
-    const l = listFor(String(key));
-    const popped = l.splice(0, count);
-    ok(popped.length ? popped : null);
-  } else if (cmdU === "LLEN") {
-    ok(listFor(String(key)).length);
   } else {
-    res.writeHead(400, { "Content-Type": "application/json" }).end(JSON.stringify({ error: `unhandled cmd ${cmdU}` }));
+    res.writeHead(400).end(JSON.stringify({ error: `unhandled cmd ${cmd}` }));
   }
 });
 await new Promise<void>((r) => upstash.listen(0, "127.0.0.1", r));
-const upstashPort = (upstash.address() as AddressInfo).port;
+const port = (upstash.address() as AddressInfo).port;
 
-// ── 設定 env（必須在 import app.ts 之前）：刻意不設 FEE_SETTLEMENT_PRIVATE_KEY ──
-process.env.X402_FACILITATOR_URL = `http://127.0.0.1:${facilitatorPort}`;
-process.env.X402_NETWORK = "base-sepolia";
-process.env.UPSTASH_REDIS_REST_URL = `http://127.0.0.1:${upstashPort}`;
+process.env.UPSTASH_REDIS_REST_URL = `http://127.0.0.1:${port}`;
 process.env.UPSTASH_REDIS_REST_TOKEN = "test-token";
-delete process.env.FEE_SETTLEMENT_PRIVATE_KEY;
+// app.ts 頂層無條件呼叫 makeProvider()（供 /oracle、/agent/:did/verification 等
+// 其他路由用），只是 import 這個模組就需要這個 env 存在，即使這裡只用到
+// applyLedgerRecording、完全不會走到任何鏈上呼叫。CI 上沒有 agent/.env，
+// 沿用 examples/api-gate.test.ts 的慣例：假 RPC。
+process.env.BASE_SEPOLIA_RPC_URL ??= "http://127.0.0.1:1";
 
-const { createApp } = await import("./app.ts");
+const { applyLedgerRecording } = await import("./app.ts");
 const { QUEUE_KEY } = await import("./ledger.ts");
-const app = createApp();
 
-const trader = "0xE80A81360608C1342e66743F70a00f75d792Eb93";
-function xPaymentFor(from: string): string {
-  const now = Math.floor(Date.now() / 1000);
-  return Buffer.from(
-    JSON.stringify({
-      x402Version: 1,
-      scheme: "exact",
-      network: "base-sepolia",
-      payload: {
-        signature: "0x" + "ab".repeat(65),
-        authorization: {
-          from,
-          to: trader,
-          value: "10000",
-          validAfter: String(now - 600),
-          validBefore: String(now + 60),
-          nonce: "0x" + "cd".repeat(32),
-        },
-      },
-    }),
-  ).toString("base64");
+const entry = {
+  trader: "0xE80A81360608C1342e66743F70a00f75d792Eb93",
+  feeUsd: 0.01,
+  at: 0,
+  source: "signals" as const,
+};
+
+function paidResponse(body: Record<string, unknown>, extraHeaders?: Record<string, string>): Response {
+  return new Response(JSON.stringify(body), {
+    status: 200,
+    headers: { "Content-Type": "application/json", ...extraHeaders },
+  });
 }
 
-// ── 1) facilitator settle 成功 → 記一筆帳，settled:true，且沒有任何鏈上呼叫 ──
+// ── 1) 沒有 ledgerEntry → 原樣放行，不是這個 request 的事 ────────────────────
 {
   const before = listFor(QUEUE_KEY).length;
-  settleMode = "success";
-  const payer = "0x1111111111111111111111111111111111111111";
-  const r = await app.request(`/signals/${trader}`, { headers: { "X-PAYMENT": xPaymentFor(payer) } });
-  assert.equal(r.status, 200, `expected 200, got ${r.status}`);
-  const j = (await r.json()) as { ok: boolean; settled: boolean; settleError?: string; data: unknown };
-  assert.equal(j.ok, true);
-  assert.equal(j.settled, true, "settle 成功時 settled 必須是 true");
+  const res = paidResponse({ ok: true }, { "X-PAYMENT-RESPONSE": "fake" });
+  const out = await applyLedgerRecording(undefined, res);
+  assert.strictEqual(out, res, "沒有 entry 時應該原封不動回傳同一個 Response 物件");
+  assert.equal(listFor(QUEUE_KEY).length, before);
+  console.log("沒有 ledgerEntry → 原樣放行 ✓");
+}
+
+// ── 2) 有 entry，但沒有 X-PAYMENT-RESPONSE（facilitator settle 沒成功）
+//      → 不記帳。這是順序 bug 的修法本身：只有確定收到錢才記。────────────────
+{
+  const before = listFor(QUEUE_KEY).length;
+  const res402 = new Response(JSON.stringify({ ok: false, error: "settle failed" }), { status: 402 });
+  const out = await applyLedgerRecording(entry, res402);
+  assert.strictEqual(out, res402);
+  assert.equal(listFor(QUEUE_KEY).length, before, "settle 沒成功絕對不能記帳");
+  console.log("有 entry 但沒有 X-PAYMENT-RESPONSE（402）→ 不記帳 ✓");
+}
+
+// ── 3) 200 但沒帶 X-PAYMENT-RESPONSE（防禦性：理論上不會發生，但邏輯上仍要
+//      以 header 為準，不是以 status 為準）────────────────────────────────
+{
+  const before = listFor(QUEUE_KEY).length;
+  const res = paidResponse({ ok: true });
+  const out = await applyLedgerRecording(entry, res);
+  assert.strictEqual(out, res);
+  assert.equal(listFor(QUEUE_KEY).length, before);
+  console.log("200 但沒有 X-PAYMENT-RESPONSE → 不記帳 ✓");
+}
+
+// ── 4) facilitator settle 成功 + ledger 已設定 → 記一筆帳，settled:true ──────
+{
+  const before = listFor(QUEUE_KEY).length;
+  const res = paidResponse({ ok: true, data: { fake: true } }, { "X-PAYMENT-RESPONSE": "fake" });
+  const out = await applyLedgerRecording(entry, res);
+  assert.equal(out.status, 200);
+  const j = (await out.json()) as { ok: boolean; settled: boolean; settleError?: string; data: unknown };
+  assert.equal(j.ok, true, "原本的資料欄位要保留");
+  assert.equal(j.settled, true);
   assert.equal(j.settleError, undefined);
-  assert.ok(j.data, "付費者仍要拿到訊號資料");
+  assert.ok(j.data, "原本的 data 欄位不能被記帳邏輯洗掉");
 
   const after = listFor(QUEUE_KEY);
   assert.equal(after.length, before + 1, "必須剛好新增一筆佇列項目");
-  const entry = JSON.parse(after[after.length - 1]!) as { trader: string; feeUsd: number; source: string };
-  assert.equal(entry.trader, trader);
-  assert.equal(entry.feeUsd, 0.01);
-  assert.equal(entry.source, "signals");
-  console.log("facilitator settle 成功 → 記帳一筆，settled:true，無鏈上呼叫 ✓");
+  const pushed = JSON.parse(after[after.length - 1]!) as { trader: string; feeUsd: number; source: string };
+  assert.equal(pushed.trader, entry.trader);
+  assert.equal(pushed.feeUsd, entry.feeUsd);
+  assert.equal(pushed.source, entry.source);
+  console.log("settle 成功 + ledger 已設定 → 記帳一筆，settled:true ✓");
 }
 
-// ── 2) facilitator settle 失敗 → 402，且**不**記帳（順序 bug 的修法）─────────
+// ── 5) ledger 未設定（沒有 UPSTASH env）→ 資料照給，settled:false + 明確 settleError ──
 {
-  const before = listFor(QUEUE_KEY).length;
-  settleMode = "fail";
-  const payer = "0x2222222222222222222222222222222222222222";
-  const r = await app.request(`/signals/${trader}`, { headers: { "X-PAYMENT": xPaymentFor(payer) } });
-  assert.equal(r.status, 402, `settle 失敗必須回 402，got ${r.status}`);
-  const after = listFor(QUEUE_KEY).length;
-  assert.equal(after, before, "settle 失敗時絕對不能記帳——買方沒被扣款");
-  console.log("facilitator settle 失敗 → 402，且未記帳 ✓");
-}
-
-// ── 3) /oracle 走同一條路，記帳對象是 resolveTrader() 的受益人 ───────────────
-{
-  settleMode = "success";
-  const before = listFor(QUEUE_KEY).length;
-  const payer = "0x3333333333333333333333333333333333333333";
-  const r = await app.request(`/oracle/sBTC`, { headers: { "X-PAYMENT": xPaymentFor(payer) } });
-  assert.equal(r.status, 200, `expected 200, got ${r.status}: ${await r.clone().text()}`);
-  const j = (await r.json()) as { settled: boolean };
-  assert.equal(j.settled, true);
-  const after = listFor(QUEUE_KEY);
-  assert.equal(after.length, before + 1);
-  const entry = JSON.parse(after[after.length - 1]!) as { feeUsd: number; source: string };
-  assert.equal(entry.feeUsd, 0.005);
-  assert.equal(entry.source, "oracle");
-  console.log("/oracle settle 成功 → 記帳一筆（source=oracle）✓");
-}
-
-// ── 4) ledger 未設定（Upstash 憑證缺）→ settled:false + 明確 settleError ──────
-{
-  settleMode = "success";
   delete process.env.UPSTASH_REDIS_REST_URL;
   delete process.env.UPSTASH_REDIS_REST_TOKEN;
-  const payer = "0x4444444444444444444444444444444444444444";
-  const r = await app.request(`/signals/${trader}`, { headers: { "X-PAYMENT": xPaymentFor(payer) } });
-  assert.equal(r.status, 200);
-  const j = (await r.json()) as { ok: boolean; settled: boolean; settleError?: string };
+  const res = paidResponse({ ok: true, data: { fake: true } }, { "X-PAYMENT-RESPONSE": "fake" });
+  const out = await applyLedgerRecording(entry, res);
+  const j = (await out.json()) as { ok: boolean; settled: boolean; settleError?: string };
   assert.equal(j.ok, true, "ledger 沒設定不影響資料交付——買方已付款，資料照給");
   assert.equal(j.settled, false);
   assert.ok(j.settleError?.includes("UPSTASH"), `settleError 應點名缺的 env，got: ${j.settleError}`);
   console.log("ledger 未設定 → 資料照給、settled:false、settleError 點名缺的 env ✓");
-  process.env.UPSTASH_REDIS_REST_URL = `http://127.0.0.1:${upstashPort}`;
+  process.env.UPSTASH_REDIS_REST_URL = `http://127.0.0.1:${port}`;
   process.env.UPSTASH_REDIS_REST_TOKEN = "test-token";
 }
 
-await new Promise<void>((r) => facilitator.close(() => r()));
+// ── 6) ledger 有設定但寫入失敗（連線被拒）→ settled:false + settleError，
+//      資料仍然照給（買方已付款，不能因為我們自己的記帳失敗就不給資料）────────
+{
+  upstashDown = true;
+  const res = paidResponse({ ok: true, data: { fake: true } }, { "X-PAYMENT-RESPONSE": "fake" });
+  const out = await applyLedgerRecording(entry, res);
+  const j = (await out.json()) as { ok: boolean; settled: boolean; settleError?: string };
+  assert.equal(j.ok, true);
+  assert.equal(j.settled, false);
+  assert.ok(j.settleError, "寫入失敗要留下明確原因，不能靜默吞掉");
+  console.log("ledger 寫入失敗 → 資料照給、settled:false、settleError 有留下原因 ✓");
+  upstashDown = false;
+}
+
 await new Promise<void>((r) => upstash.close(() => r()));
 console.log("ledgerFlow.test.ts ✓ all assertions passed");

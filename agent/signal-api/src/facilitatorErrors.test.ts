@@ -40,6 +40,10 @@ const port = (stub.address() as AddressInfo).port;
 // app.ts 在 import 時讀 env，必須先設好再動態載入。
 process.env.X402_FACILITATOR_URL = `http://127.0.0.1:${port}`;
 process.env.X402_NETWORK = "base-sepolia";
+// app.ts 頂層無條件呼叫 makeProvider()，需要這個 env 才建得起來——CI 上沒有
+// agent/.env，不設就會在 import 這一步直接丟錯。沿用 examples/api-gate.test.ts
+// 的慣例：假 RPC，反正這支測試從不真的打鏈上。
+process.env.BASE_SEPOLIA_RPC_URL ??= "http://127.0.0.1:1";
 const { createApp, classifyFacilitatorFailure } = await import("./app.ts");
 const app = createApp();
 
