@@ -21,6 +21,11 @@ was not, the reason is given rather than glossed over.
 | 11 | V2 vault: no reentrancy guard, unbounded asset registry | **Fixed** |
 | 12 | Frontend type escapes (`any`) | **Reduced 42 → 19**; rest is library typing |
 | 13 | All 6 roles on one deployer key | **Mitigated** — separated 2026-07-27; multisig + revoke still open |
+| 14 | x402 revenue split is an on-chain tx inside the paid request | **Fixed** — ledger + single-signer batch worker; caveats below |
+| 15 | `maxTimeoutSeconds` is advertised, not enforced | **Configured** (60s); facilitator does not enforce an upper bound |
+| 16 | Public facilitator: unknown rate limit, errors surfaced as 500 | **Partly fixed** — verify-phase errors now 429/502; limit still unknown |
+| 17 | No KYT/KYA screening of counterparty addresses | **Open** — not implemented, budget sketched |
+| 18 | No latency / success-rate acceptance thresholds | **Partly measured** — facilitator + 402 challenge measured; paid path not |
 
 ---
 
@@ -275,6 +280,308 @@ asserts that a contract left with zero admins can never grant a role or be
 upgraded again.
 
 Procedure in [KEY_MANAGEMENT.md](KEY_MANAGEMENT.md).
+
+---
+
+## x402 payment layer (added 2026-09-17)
+
+Items 14–18 cover `agent/signal-api`. Everything stated as measured was measured
+on 2026-09-17 with `agent/signal-api/scripts/probe-facilitator.ts`, from a client
+in Taiwan. The Vercel function runs in `sin1`, so its round-trip to the
+facilitator will differ from these figures. They are an order of magnitude, not
+an SLA.
+
+## 14. The 70/20/10 revenue split is an on-chain transaction inside the paid request — fixed with a ledger + single-signer worker
+
+**What it was.** `GET /signals/:trader` and `GET /oracle/:asset` called
+`settleRevenue()` before responding: balance → allowance → (approve) →
+`FeeRouter.routeExternalRevenue`, awaiting each receipt. Three problems, the
+third found while verifying this entry:
+
+- **Latency.** The response was bound to block confirmation (≥ 2 s).
+- **Nonce collisions across instances.** `settlement.ts` serialised settlements
+  with an in-process promise chain. Vercel runs several instances sharing one
+  `FEE_SETTLEMENT_PRIVATE_KEY`, and in-process serialisation cannot coordinate
+  across them.
+- **Ordering.** In x402-hono 0.5.3 the route handler runs *before* the
+  facilitator's `/settle`. If `/settle` then failed, the buyer got a 402 and was
+  not charged, but our revenue split had already gone on-chain.
+
+**What changed.** The handlers no longer call `settleRevenue()` at all. They
+call `c.set("ledgerEntry", { trader, feeUsd, at, source })` and return their
+data immediately (`agent/signal-api/src/app.ts`). A middleware wrapping
+`paymentMiddleware` reads that entry back out *after* `next()` returns, checks
+whether the response carries `X-PAYMENT-RESPONSE` (x402-hono only sets this
+when the facilitator's `/settle` succeeded), and only then pushes the entry to
+a queue (`agent/signal-api/src/ledger.ts`). If the facilitator settle fails,
+x402-hono replaces the response with a 402 before our middleware's check runs,
+so the entry is never read and nothing is queued — **that is the ordering fix**:
+recording moved from "before we know if payment succeeded" to "after".
+
+A separate script, `agent/signal-api/src/settlement-worker.ts`, drains the
+queue and is the only thing that ever calls `routeExternalRevenue`. It runs as
+a single process on a cron trigger (`.github/workflows/x402-settlement-worker.yml`,
+`*/10 * * * *`, `concurrency: cancel-in-progress: false` so overlapping runs
+queue rather than run concurrently). **With exactly one process ever holding
+`FEE_SETTLEMENT_PRIVATE_KEY`, the cross-instance nonce collision is eliminated
+by construction**, not just made less likely.
+
+**Queue: Upstash Redis, chosen and not measured against alternatives.** The
+project had no persistent store at all. Upstash's REST API needs no persistent
+TCP connection, which matches Vercel's serverless functions — each push/pop is
+one HTTPS call, the same shape the codebase already uses for the facilitator
+and price feeds. The alternative considered and rejected was a file committed
+to the repo via the GitHub API: no new service, but committing on every paid
+request would collide with the bundle-fingerprint check in
+`check-vercel-bundle.mjs` and rate-limit against GitHub's own API. Vercel
+KV/Postgres were not evaluated in depth; Upstash was picked for the REST-only
+property and free tier, not because the others were tested and found worse.
+
+**Retry and failure.** Three lists: `x402:settlement:queue` (new entries, FIFO
+via RPUSH/LPOP), `x402:settlement:retry` (entries that failed at least once,
+processed first on each run), `x402:settlement:dead` (failed
+`SETTLEMENT_MAX_RETRIES`, default 5, times — needs a human). Each run processes
+up to `SETTLEMENT_BATCH_SIZE` (default 25) retry entries, then up to the
+remaining budget of new entries. If more than `SETTLEMENT_MAX_FAIL_PCT` (default
+30%) of what it processed failed, the script exits non-zero and the workflow
+run is red — the same convention `base-sepolia-keeper.yml` already uses for
+feed writes, applied here to settlement.
+
+**What `settled` means now.** It used to mean "this transaction hash exists
+on-chain." It now means "queued; a worker will attempt it." A response can say
+`settled: true` and the on-chain transfer can still fail later and end up in
+the dead-letter list — the response is written before the worker ever runs.
+`GET /` states this in `revenueModel`.
+
+**Tested offline, not on testnet — and the first version of this test was
+wrong.** The recording decision lives in `applyLedgerRecording()`, a pure
+function exported from `app.ts`: `(ledgerEntry, response) → response`. It reads
+nothing but its arguments and touches no contract, no provider, no `ethers`
+code at all — `ledgerFlow.test.ts` tests it directly with hand-built `Response`
+objects (a stub Upstash server behind it, to also prove the actual RPUSH
+happens). It checks: no entry → passthrough; entry but no
+`X-PAYMENT-RESPONSE` (facilitator settle didn't succeed) → not recorded; settle
+succeeded + ledger configured → exactly one queue entry with the right fields,
+`settled:true`; ledger not configured → data still returned, `settled:false`,
+`settleError` names the missing env; the Upstash write itself failing → same,
+data still returned, error surfaced rather than swallowed.
+
+The first version of this test went through the real `/signals` and `/oracle`
+handlers with a real (stub-driven) facilitator and asserted `200`. It passed
+locally and failed in CI — `getTraderPerformance`/`getOracleSnapshot` need a
+live Base Sepolia RPC to return real position/oracle data, and it only worked
+locally because this machine's `agent/.env` happened to have a working RPC URL
+already set from unrelated local dev. `agent-ci.yml` has no RPC configured
+(deliberately, per its own header comment: the point of that workflow is tests
+that need no keys and touch no network), so any request through those handlers
+always failed with 400 before the facilitator or the ledger were ever reached.
+The extraction above is the fix: it moved the thing actually being tested (the
+recording *decision*) out from behind the thing that can't run offline (the
+trading data fetch), instead of trying to fake a Base Sepolia RPC.
+
+`settlementWorker.test.ts` drives the retry → dead-letter transition directly,
+without `FEE_SETTLEMENT_PRIVATE_KEY` set, so `settleRevenue` fails
+deterministically with `"settlement disabled"` — no chain reachability needed
+there either. **Neither test has run against a live queue or a live signer.**
+As of this writing the GitHub Actions workflow has the four secrets it needs
+(`FEE_SETTLEMENT_PRIVATE_KEY`, `BASE_SEPOLIA_RPC_URL`, `UPSTASH_REDIS_REST_URL`,
+`UPSTASH_REDIS_REST_TOKEN`) but has not executed in production — GitHub
+Actions' `workflow_dispatch` API refuses to run a workflow that only exists on
+a feature branch (`HTTP 404: workflow ... not found on the default branch`),
+so the first real run will be either the first scheduled tick after this PR
+merges to `master`, or a manual dispatch right after that merge. A local run of
+`settlement-worker.ts` against the real Upstash instance and the real
+`FEE_SETTLEMENT_PRIVATE_KEY` signer did succeed (2026-09-17): it connected,
+read an empty queue, and exited 0 — the credentials work, there was just
+nothing to settle yet, since the deployed API is still running the pre-ledger
+code until this merges.
+
+**Left open:**
+
+- **Cron cadence is best-effort**, like the price keeper workflows. An entry
+  can sit in the queue for well over 10 minutes before being drained, and
+  §18's "settlement success" acceptance metric still has no data source until
+  the worker actually runs.
+- **The retry backoff is "next cron tick," not exponential.** A transient RPC
+  failure and a permanent one (e.g., wrong `X402_FEE_ROUTER`) are retried
+  identically until the attempt count runs out.
+- **The dead-letter list is not surfaced anywhere a human would see it**
+  without checking Upstash directly or reading workflow logs; the workflow
+  only turns red, it doesn't say why in a way that reaches a dashboard.
+- **`settlement.ts`'s own in-process queue** (the promise chain that used to
+  serialise per-instance settlement) is still there, now serialising calls
+  *within* the single worker process. It's redundant now that the worker
+  already processes entries in a sequential loop, but harmless, so it was left
+  rather than touched for its own sake.
+
+**What batching did not fix, because it can't from our side.** The facilitator
+step is untouched: x402-hono still awaits the facilitator's `/settle`, which
+waits for the `transferWithAuthorization` receipt, before releasing the
+response. A paid x402 v1 `exact` request still cannot come back faster than one
+Base block through this middleware. See §18.
+
+## 15. `maxTimeoutSeconds` is advertised, not enforced
+
+Both paid routes now set `maxTimeoutSeconds: 60`. Before this they set nothing,
+and x402-hono 0.5.3 filled in **300**. The value reaches the client in the 402
+challenge, and the client uses it to compute EIP-3009 `validBefore`. Verified by
+`signal-api/src/facilitatorErrors.test.ts`, which asserts the challenge carries 60.
+
+**How the facilitator treats it.** The x402 core spec does not require a
+facilitator to check an upper bound on `validBefore`. We sent signed
+authorizations from a random zero-balance wallet to `https://x402.org/facilitator/verify`.
+Only `/verify` was called, never `/settle`, so nothing could move. A result of
+`insufficient_balance` means the time checks passed.
+
+| Case | validAfter | validBefore | Result |
+|---|---|---|---|
+| A | now−600 (x402 0.5.3 client) | now+60 | insufficient_balance → accepted |
+| B | 0 | now+60 | insufficient_balance → accepted |
+| C | now−600 | now+3 | `valid_before` rejected |
+| D | now−600 | now+3600 | insufficient_balance → accepted |
+| E | now+300 | now+600 | `valid_after` rejected |
+| F | 0 | now+30 days | insufficient_balance → accepted |
+
+Conclusion: this facilitator behaves like the reference implementation. It
+rejects `validBefore < now + 6` and future `validAfter`, and applies **no upper
+bound**. A 30-day authorization passes the time checks. It is not the broken
+`(validBefore − validAfter) < maxTimeoutSeconds` variant, because case B would
+have failed. The ordering inference (C and E fail before the balance check, so
+an upper-bound check would have surfaced in D or F) relies on the error each case
+returned, not on reading the facilitator's source, which is not public.
+
+**What that means for us.** `maxTimeoutSeconds: 60` states intent and bounds
+compliant clients, nothing more. A client can sign a longer window and it will
+be accepted. The exposure falls mainly on the payer, since a leaked `X-PAYMENT`
+header stays spendable for longer, but the only possible payee is our `payTo`.
+Enforcing the bound would mean checking `validBefore` in our own middleware
+before calling `/verify`. That was not done: the risk is to the payer, not to us.
+
+Note also that the installed x402 client (0.5.3) signs `validAfter = now − 600`,
+not 0. A facilitator of the broken variant would reject case B but accept A, so
+our own clients would not have exposed that bug.
+
+## 16. Public facilitator: rate limit unknown, errors used to surface as 500
+
+**Limit.** `docs.x402.org` publishes no RPS or quota for `x402.org/facilitator`.
+It says only that the public facilitator is intended for development and testnet
+workflows. Its responses carry no `RateLimit-*` headers, and it is served through
+Cloudflare → Vercel. **We did not load-test it to find the ceiling.** It is
+someone else's shared service, and finding its limit means pushing it past its
+limit. The 50 RPS figure that circulates belongs to Coinbase's CDP facilitator,
+a different service. Treat the public facilitator's limit as unknown and lower
+than production needs.
+
+This matters more than the number suggests. Every Vercel instance shares the
+same facilitator and, from its point of view, a small set of egress IPs, so
+whatever limit exists is shared across all of our instances, not applied per
+instance.
+
+**Error handling, before.** x402-hono 0.5.3 throws from `/verify` on any non-200
+(`Failed to verify payment: <statusText>`) and does not catch it. A facilitator
+429 reached the buyer as Hono's generic `500 Internal Server Error`, with no
+indication of whose fault it was or whether to retry.
+
+**Now.** `app.ts` wraps `paymentMiddleware`:
+
+| Facilitator returns | Buyer now gets |
+|---|---|
+| HTTP 429 on `/verify` | `429 facilitator_rate_limited` + `Retry-After: 5` |
+| HTTP 5xx on `/verify`, or network failure | `502 facilitator_unavailable` |
+| 200 `isValid:false` with a rate-limit reason (the CDP shape) | `429` instead of `402` |
+| 200 `isValid:false` for a real reason (bad signature, …) | `402`, unchanged |
+| any error we do not recognise | original path, unchanged |
+
+Each wrapped response states that nothing was charged. Tested offline against a
+stub facilitator in `signal-api/src/facilitatorErrors.test.ts`, which runs in
+`npm test`.
+
+**Not done:**
+
+- **Retry.** A server-side retry would stack more calls onto a facilitator that
+  is already refusing them. `Retry-After` hands that decision to the client.
+- **Fallback facilitator.** None configured. A second facilitator would need its
+  own trust assessment, since it signs settlements into our `payTo`.
+- **Settle-phase rate limits.** When `/settle` fails, x402-hono puts the `Error`
+  object itself into the 402 body, which serialises to `{}`. The reason is lost
+  before our wrapper sees it, so a settle-phase 429 still reaches the buyer as a
+  bare 402. Fixing it means patching or replacing the middleware. The buyer is
+  not charged in this case, but see §14 on our revenue split having already run.
+- **Detection is string-based.** It matches `statusText` ("Too Many Requests")
+  and reason strings. If the facilitator changes wording, recognition degrades
+  back to the old behaviour. The test pins the shapes we know about.
+
+## 17. No KYT / KYA screening of counterparty addresses
+
+Neither direction screens addresses. `agent/x402_agent.ts` pays whatever `payTo`
+a 402 challenge names. `signal-api` accepts payment from any `from` address the
+facilitator verifies, and `routeExternalRevenue` sends 70% to whatever trader
+address the request path contains, after only a format and zero-address check.
+
+**Why the existing identity work does not cover it.** The VC/SSI layer
+(`AGENT_IDENTITY_VC_SSI.md`) answers *who authorised this agent, and within what
+limits*. It says nothing about whether an address is sanctioned, mixer-linked, or
+exploit-linked. An authorised agent can pay a sanctioned address with a perfectly
+valid VC. **The VC governs the principal and KYA governs the address. Each
+complements the other, and neither replaces it.**
+
+**What production would need:**
+
+- A screening call before signing on the paying side, and on receipt of
+  `payer` / before `routeExternalRevenue` on the receiving side.
+- A cached allow/deny list in front of the vendor, so repeat counterparties do
+  not pay per-call latency every time. The agent-to-agent traffic here is highly
+  repetitive.
+- Fail-closed or fail-open as an explicit, documented choice. For outbound
+  payments fail-closed is the defensible default. For inbound micro-payments
+  screening can run after delivery, since the funds have already arrived and the
+  question becomes whether to route the split.
+- Retry with backoff. Third-party screening APIs have intermittent network
+  errors. One reported PoC measured roughly 99.97% success at 10 TPS outside load
+  tests, which at our volumes would mean occasional failures that must not become
+  a declined payment.
+
+**Rough budget, not measured by us.** Screening vendors typically add one HTTPS
+round-trip, in the low hundreds of milliseconds, and are priced per screened
+address or by contract. At $0.005–$0.01 per call, a per-call paid screen can cost
+more than the payment it screens. That is the practical argument for caching and
+for screening addresses rather than transactions. Treat these figures as
+something to confirm with a vendor, not as numbers from this project.
+
+**Why not implemented.** Testnet only, no vendor account, and a mock screen would
+be the kind of decorative control §10 warns about.
+
+## 18. Latency and success-rate acceptance thresholds
+
+The repository had no latency, throughput, or success-rate targets for the paid
+path. (`signal-api/src/benchmarks.ts` is unrelated: it serves the S&P 500 / gold
+/ BTC comparison data for the Portfolio page.)
+
+**Measured 2026-09-17**, sequential with a 500 ms gap, from Taiwan:
+
+| Metric | n | p50 | p95 | max | Non-success |
+|---|---|---|---|---|---|
+| `x402.org/facilitator` `/verify` | 30 | 438 ms | 552 ms | 834 ms | 0 |
+| Deployed `/signals/:trader` → 402 challenge | 30 | 118 ms | 150 ms | 151 ms | 0 |
+| Deployed `/oracle/sBTC` → 402 challenge | 30 | 390 ms | 888 ms | 1087 ms | 0 |
+
+`/oracle` is slower at the challenge because its freshness gate makes two RPC
+reads *before* the 402, which is deliberate: x402 has no refunds, so a stale
+price is refused before payment.
+
+**Proposed thresholds, and why one of them changed:**
+
+| Metric | Proposed | Status |
+|---|---|---|
+| Paid endpoint P95, excluding our revenue split | ≤ 500 ms was proposed | **Not achievable as stated.** A paid request is challenge + `/verify` + handler + facilitator `/settle`, and the last one waits for an on-chain receipt (§14). `/verify` alone has p95 552 ms from here. A meaningful target needs a real paid-path measurement first. |
+| Facilitator `/verify` latency | p95 ≤ 600 ms from the function region | Measured above, but from Taiwan, not from `sin1` |
+| 402 challenge P95 | `/signals` ≤ 250 ms, `/oracle` ≤ 1000 ms | Measured |
+| Revenue settlement success | ≥ 99%, every failure visible in `settleError` | **No data.** The batch worker (§14) now makes this countable in principle — it prints `settled=/failed=/dead=` per run and fails the CI job past `SETTLEMENT_MAX_FAIL_PCT` — but the workflow has not executed in production (no secrets set yet), so there is still no real sample to report a percentage from. |
+
+**Not measured:** the full paid request. It needs a funded Base Sepolia buyer
+wallet and spends test USDC on every sample, so it was left for a human to run,
+for example with `agent/examples/buy-signal.ts` in a loop. Until then no P95 for
+the paid path is claimed here.
 
 ---
 

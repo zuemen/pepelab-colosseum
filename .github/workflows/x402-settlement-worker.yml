@@ -1,0 +1,99 @@
+name: x402 Settlement Worker
+
+# 優先序 1（x402 硬化）：把 70/20/10 分潤的上鏈交易移出付費請求路徑。
+# agent/signal-api/src/app.ts 的兩個付費端點現在只把 (trader, feeUsd, timestamp)
+# 推進 Upstash 佇列就回應；真正送 FeeRouter.routeExternalRevenue 的地方只剩這支
+# workflow 觸發的 agent/signal-api/src/settlement-worker.ts。
+#
+# 為什麼這樣就讓跨實例 nonce 衝突在設計上消失：以前是「每個 Vercel 實例各自在
+# 請求路徑裡送交易，共用同一把 FEE_SETTLEMENT_PRIVATE_KEY」——事情發生在無法控制
+# 並發數的地方。現在送交易的地方只剩這一個 workflow、一個 job、一個 process；
+# `concurrency` 確保同一時刻至多一個 run 在執行，所以持有這把私鑰的 process 永遠
+# 只有一個，nonce 序列只有一條，不是「機率上很少撞」而是「結構上不可能撞」。
+#
+# 跟 base-sepolia-keeper.yml 沿用同一套 pattern（單一 signer、GitHub Actions
+# cron、缺 secret fail fast、送交易前檢查 gas 餘額），只是這裡的 signer
+# （FEE_SETTLEMENT_PRIVATE_KEY）跟喂價的 KEEPER_PRIVATE_KEY 是不同的鑰匙、不同
+# 的 nonce 序列，所以用獨立的 concurrency group，不跟喂價互相排隊。
+on:
+  schedule:
+    # 名目 10 分鐘；GitHub 排程是 best-effort，實測跟 price-keeper.yml 一樣可能
+    # 是 15–170 分鐘。這不是喂價那種 liveness 關鍵路徑（買方已經拿到資料、已經
+    # 付款，這裡只影響分潤多久才上鏈），所以 best-effort 可以接受，但代表佇列裡
+    # 的項目可能等上一段時間才被結算——見 docs/KNOWN_LIMITATIONS.md §14。
+    - cron: '*/10 * * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# 獨立的 group：FEE_SETTLEMENT_PRIVATE_KEY 跟 KEEPER_PRIVATE_KEY 是不同的鑰匙，
+# 這支 workflow 不會跟喂價系列 workflow 搶同一個 nonce 序列，不需要共用 group。
+concurrency:
+  group: x402-settlement-worker
+  cancel-in-progress: false
+
+jobs:
+  settle:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      FEE_SETTLEMENT_PRIVATE_KEY: ${{ secrets.FEE_SETTLEMENT_PRIVATE_KEY }}
+      BASE_SEPOLIA_RPC_URL: ${{ secrets.BASE_SEPOLIA_RPC_URL }}
+      UPSTASH_REDIS_REST_URL: ${{ secrets.UPSTASH_REDIS_REST_URL }}
+      UPSTASH_REDIS_REST_TOKEN: ${{ secrets.UPSTASH_REDIS_REST_TOKEN }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+
+      - name: Fail fast when secrets are missing
+        run: |
+          set -euo pipefail
+          missing=()
+          [ -z "${FEE_SETTLEMENT_PRIVATE_KEY:-}" ] && missing+=(FEE_SETTLEMENT_PRIVATE_KEY)
+          [ -z "${BASE_SEPOLIA_RPC_URL:-}" ] && missing+=(BASE_SEPOLIA_RPC_URL)
+          [ -z "${UPSTASH_REDIS_REST_URL:-}" ] && missing+=(UPSTASH_REDIS_REST_URL)
+          [ -z "${UPSTASH_REDIS_REST_TOKEN:-}" ] && missing+=(UPSTASH_REDIS_REST_TOKEN)
+          if [ "${#missing[@]}" -gt 0 ]; then
+            echo "::error::缺少 secrets：${missing[*]} —— 結算 worker 無法運作。"
+            exit 1
+          fi
+
+      # 見 base-sepolia-keeper.yml 的同名步驟：先講清楚是不是餘額問題，不要讓
+      # 「gas 用完」跟「RPC 掛了」長得一樣。這支一次最多處理到 SETTLEMENT_BATCH_SIZE
+      # 筆（預設 25），每筆最多 3 個 tx（mint/approve/route），比喂價單筆更耗 gas，
+      # 門檻相應調高。
+      - name: Check settlement signer gas balance
+        uses: foundry-rs/foundry-toolchain@v1
+      - name: Warn before the tank runs dry
+        env:
+          RPC_URL: ${{ secrets.BASE_SEPOLIA_RPC_URL }}
+          PK: ${{ secrets.FEE_SETTLEMENT_PRIVATE_KEY }}
+        run: |
+          set -euo pipefail
+          ADDR=$(cast wallet address --private-key "$PK")
+          BAL=$(cast balance "$ADDR" --rpc-url "${RPC_URL:-https://sepolia.base.org}")
+          ETH=$(cast from-wei "$BAL")
+          echo "settlement signer $ADDR 餘額 $ETH ETH"
+          if [ "$(echo "$ETH < 0.05" | bc -l)" = "1" ]; then
+            echo "::warning::settlement signer 餘額只剩 $ETH ETH。請補 gas，否則分潤結算會停。"
+          fi
+          if [ "$(echo "$ETH < 0.005" | bc -l)" = "1" ]; then
+            echo "::error::settlement signer 餘額 $ETH ETH，不足以送出交易。"
+            exit 1
+          fi
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: agent/package-lock.json
+
+      - name: Install agent deps
+        working-directory: agent
+        run: npm ci --no-audit --no-fund
+
+      # 失敗率門檻、死信判斷都在腳本自己裡面做（見 settlement-worker.ts），
+      # exit code 直接就是判斷依據，不需要像 keeper 系列那樣另外 grep 輸出行。
+      - name: Drain settlement queue
+        working-directory: agent
+        run: npx tsx signal-api/src/settlement-worker.ts
