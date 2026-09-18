@@ -75,6 +75,8 @@ export default function ExchangePage() {
   const [usdcBal,   setUsdcBal]   = useState(0n);
   const [usdtBal,   setUsdtBal]   = useState(0n);
   const [ethBal,    setEthBal]    = useState('0.0000');
+  /** 未經四捨五入的 ETH 餘額。ethBal 是給畫面看的 4 位小數字串,拿去比大小會失準。 */
+  const [ethBalRaw, setEthBalRaw] = useState(0n);
   const [pageLoading, setPageLoading] = useState(true);
 
   const [pepeBal,   setPepeBal]   = useState(0n);
@@ -120,6 +122,7 @@ export default function ExchangePage() {
       ]);
       setUsdcBal(bal);
       setEthBal(f18(eBal, 4));
+      setEthBalRaw(eBal);
 
       // USDT balance — MockUSDT is a separate token from the USDC margin
       // stablecoin. Skip the read when it isn't deployed on this chain.
@@ -233,6 +236,17 @@ export default function ExchangePage() {
     if (!amt || amt <= 0) { notify(t.exchange.tx.enterValidAmount, false); return; }
     // 事前擋掉必定 revert 的兩種情況，不讓使用者白付 gas。
     if (ammOracleStale) { notify(AMM_STALE_MSG, false); return; }
+    // 餘額不足是第三種必定失敗的情況,而且最常見。少了這道檢查,USDC→ETH 會先送出
+    // approve 叫出錢包、等使用者簽完付掉 gas,才在 swap 那一步失敗——白付一筆。
+    const payRaw = parseEther(payAmount);
+    const balRaw = swapMode === 'eth-to-usdc' ? ethBalRaw : usdcBal;
+    if (payRaw > balRaw) {
+      notify(interpolate(t.exchange.tx.insufficientBalance, {
+        token:   swapMode === 'eth-to-usdc' ? 'ETH' : STABLE_LABEL,
+        balance: f18(balRaw, swapMode === 'eth-to-usdc' ? 4 : 2),
+      }), false);
+      return;
+    }
     const amm = String(contracts.pepeAMM.target);
 
     setLoad('swap', true);

@@ -13,6 +13,7 @@ export const exchange: Catalog['exchange'] = {
   /** 送出交易前後對使用者說的話。 */
   tx: {
     enterValidAmount: 'Enter a valid amount',
+    insufficientBalance: 'Not enough {token} — your balance is {balance} {token}.',
 
     /**
      * 兌換池的 oracle 過期。這句話在按下去之前就要說——合約會 revert
