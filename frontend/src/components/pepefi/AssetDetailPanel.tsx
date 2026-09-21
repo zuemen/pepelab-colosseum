@@ -76,7 +76,10 @@ export function AssetDetailPanel({
   const noBalance = assetRow.balance <= 0n
 
   return (
-    <Stack spacing={2} sx={{ p: 2.5, height: '100%', overflowY: 'auto' }}>
+    // #147：父層(桌面側欄的 Card、手機 Drawer 的 paper)都是 flex column,
+    // 這裡當 flex 子項吃掉剩餘空間。minHeight:0 是關鍵——flex 子項的預設
+    // min-height:auto 會讓它拒絕縮到內容高度以下,overflowY 就永遠不觸發。
+    <Stack spacing={2} sx={{ p: 2.5, flex: 1, minHeight: 0, overflowY: 'auto' }}>
       {/* ── 標頭 ── */}
       <Stack direction="row" spacing={1.25} alignItems="flex-start">
         <AssetIcon symbol={sym} size={32} />
