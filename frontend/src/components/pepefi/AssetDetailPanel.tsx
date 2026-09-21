@@ -17,6 +17,8 @@ import Box from '@mui/material/Box'
 import Chip from '@mui/material/Chip'
 import Stack from '@mui/material/Stack'
 import Button from '@mui/material/Button'
+import type { AttestedTier } from 'src/hooks/useCarbonTiers'
+
 import Divider from '@mui/material/Divider'
 import IconButton from '@mui/material/IconButton'
 import Typography from '@mui/material/Typography'
@@ -30,6 +32,7 @@ import { Icon } from '@iconify/react'
 import AssetIcon from './AssetIcon'
 import { AssetCandleChart } from './AssetCandleChart'
 import { AssetProvenanceSummary, AssetProvenanceBody } from './AssetProvenance'
+import { AttestedTierBlock } from './AttestedCarbonTier'
 
 export interface AssetDetailPanelProps {
   sym: AssetSymbol
@@ -48,6 +51,20 @@ export interface AssetDetailPanelProps {
   onConfirm: () => void
   onAddToWallet: () => void
   onClose: () => void
+  /**
+   * #152：這檔資產的鏈上見證碳等級。面板本身不讀鏈——呼叫端（/tokens）已經
+   * 為整張表讀過一次,這裡沿用同一份結果,不要為了單一資產再發一次請求。
+   * undefined 代表那一筆讀失敗,和 `isRated: false`（讀到了、確實未評等）不同。
+   */
+  attested?: AttestedTier
+  attestedLoading?: boolean
+  /** 這條鏈沒有見證登記。整個區塊不渲染,不留提示——見 AttestedCarbonTier 註解。 */
+  attestedUnavailable?: boolean
+  /**
+   * `AssetVaultV2_4.mintFeeBpsForAsset()` 的鏈上結果（bps）,由呼叫端讀好傳入。
+   * null = 沒讀到（舊版金庫沒這個函式,或讀取失敗）——此時費率那句話不顯示。
+   */
+  mintFeeBps?: number | null
 }
 
 export function AssetDetailPanel({
@@ -65,6 +82,10 @@ export function AssetDetailPanel({
   onConfirm,
   onAddToWallet,
   onClose,
+  attested,
+  attestedLoading,
+  attestedUnavailable,
+  mintFeeBps = null,
 }: AssetDetailPanelProps) {
   const dl = t.tokens.dialog
   const canConfirm = mode === 'buy' ? assetRow.canBuy : assetRow.canSell
@@ -200,6 +221,21 @@ export function AssetDetailPanel({
       </Box>
 
       <Divider />
+
+      {/* #152：緊接在買賣區塊之後——使用者剛看到手續費,這裡解釋那個費率是
+          哪個見證等級推導出來的。放到身世卡下面就隔太遠,因果讀不出來。
+          這條鏈沒有見證登記時整塊不渲染,連同上面那條分隔線一起收掉。 */}
+      {!attestedUnavailable && (
+        <>
+          <AttestedTierBlock
+            attested={attested}
+            loading={attestedLoading}
+            mintFeeBps={mintFeeBps}
+          />
+
+          <Divider />
+        </>
+      )}
 
       <AssetProvenanceBody meta={meta} />
     </Stack>

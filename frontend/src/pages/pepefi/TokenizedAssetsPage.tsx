@@ -3,6 +3,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { Contract, parseEther, type ContractTransactionResponse } from 'ethers'
 import { useContracts } from 'src/hooks/useContracts'
 import { useV2Contracts } from 'src/hooks/useV2Contracts'
+import { useCarbonTiers } from 'src/hooks/useCarbonTiers'
 import { usePepefiWallet } from 'src/layouts/pepefi'
 import { prettyError } from 'src/lib/pepefi/errorMessages'
 import { safeRead } from 'src/lib/pepefi/safeRead'
@@ -111,6 +112,9 @@ export default function TokenizedAssetsPage() {
   const wallet    = usePepefiWallet()
   const contracts = useContracts(wallet.provider, wallet.signer, wallet.chainId)
   const v2        = useV2Contracts(wallet.provider, wallet.signer, wallet.chainId)
+  // #152：整張表讀一次見證碳等級,詳情面板沿用同一份結果。V2 不存在（或這條鏈
+  // 的 stack 沒有 ESGRegistryV2）時傳 null,hook 會回 unavailable 而不發任何 RPC。
+  const carbonTiers = useCarbonTiers(v2?.esgRegistryV2 ?? null)
   const addr      = getAddresses(wallet.chainId)
 
   // 哪一套金庫在這條鏈上可用是鏈上事實，不是使用者的選擇——見 CONTEXT.md
@@ -138,6 +142,16 @@ export default function TokenizedAssetsPage() {
   // #134：詳情層取代了買賣對話框——selected 現在同時是「哪一列被點開」跟
   // 「詳情層裡買進／贖回哪個分頁」，一份狀態，不是兩份各自要對齊的狀態。
   const [selected, setSelected] = useState<{ sym: AssetSymbol; mode: 'buy' | 'sell' } | null>(null)
+  /**
+   * #152：選中資產的鏈上鑄造費率（bps）。只在面板打開時讀一檔,不為整張表讀 11 次
+   * ——這個數字只有詳情面板用得到。
+   *
+   * 一定要讀鏈上這個值,不能拿 assetRow.tradingFeeBps 代替：後者由本機靜態 tier
+   * 推導,而 carbon.ts 註明那組數字對齊的是 PerpetualExchange 的交易費,不是金庫
+   * 的鑄造費。mintFeeBpsForAsset 自己就是讀 medianCarbonTier 算的,所以面板講
+   * 「這個等級決定費率」時,因果是真的。
+   */
+  const [mintFeeBps, setMintFeeBps] = useState<number | null>(null)
   const [amount, setAmount]   = useState('')
   const [quote, setQuote]     = useState<{ out: bigint; fee: bigint } | null>(null)
   const [busy, setBusy]       = useState(false)
@@ -438,6 +452,22 @@ export default function TokenizedAssetsPage() {
     return {}
   }
 
+  const selectedSym = selected?.sym ?? null
+  useEffect(() => {
+    if (!v2?.vault || !selectedSym) { setMintFeeBps(null); return }
+    let cancelled = false
+    void (async () => {
+      // V2.4 之前的金庫沒有這個函式,safeRead 會回 fallback。那時整句費率因果
+      // 不顯示,而不是退回一個猜出來的數字。
+      const bps = await safeRead<bigint | null>(
+        v2.vault.mintFeeBpsForAsset(ASSET_IDS[selectedSym]) as Promise<bigint>,
+        null,
+      )
+      if (!cancelled) setMintFeeBps(bps === null ? null : Number(bps))
+    })()
+    return () => { cancelled = true }
+  }, [v2, selectedSym])
+
   const renderAssetCell = (col: AssetRowColumnKey, assetRow: AssetRow) => {
     const sym = assetRow.symbol as AssetSymbol
     switch (col) {
@@ -451,7 +481,15 @@ export default function TokenizedAssetsPage() {
               <Typography variant="subtitle2" sx={{ fontWeight: 'bold', lineHeight: 1.2 }}>
                 {assetRow.symbol}
               </Typography>
-              <Typography variant="caption" color="text.secondary" noWrap>
+              {/* 名稱在寬度上限內**換行**,不截斷——資產全名是使用者要讀的資訊,
+                  砍成「Synthetic iShares Clean E…」等於把它藏起來,而這一欄的重點
+                  就是講清楚這檔是什麼。
+                  原本這裡是 noWrap,但 variant="caption" 預設渲染成 <span>
+                  （display:inline）,而 overflow:hidden 與 text-overflow:ellipsis
+                  對 inline 元素無效——所以它既沒截斷也沒換行,整條溢出去疊在隔壁
+                  欄位上（在釘住的欄位尤其明顯,捲動的內容就從它底下經過）。
+                  換行同時解掉溢出,而且不必靠 hover 才讀得到全名。 */}
+              <Typography variant="caption" color="text.secondary" display="block">
                 {assetRow.name}
               </Typography>
             </Box>
@@ -559,6 +597,10 @@ export default function TokenizedAssetsPage() {
       busy={busy}
       onConfirm={() => void (selected.mode === 'buy' ? doBuy(selected.sym) : doSell(selected.sym))}
       onAddToWallet={() => void addToWallet(selected.sym)}
+      attested={carbonTiers.data[ASSET_IDS[selected.sym]]}
+      attestedLoading={!carbonTiers.loaded}
+      attestedUnavailable={carbonTiers.unavailable}
+      mintFeeBps={mintFeeBps}
       onClose={closePanel}
     />
   ) : null

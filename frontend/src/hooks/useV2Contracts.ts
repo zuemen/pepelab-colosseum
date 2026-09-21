@@ -4,8 +4,10 @@ import { useMemo } from 'react'
 import { Contract } from 'ethers'
 
 import { getV2Stack, hasV2Stack } from 'src/contracts/addresses'
+import { isDeployed } from 'src/lib/pepefi/safeRead'
 import AssetVaultV2ABI  from 'src/contracts/abi/AssetVaultV2.json'
 import GuardedOracleABI from 'src/contracts/abi/GuardedOracle.json'
+import ESGRegistryV2ABI from 'src/contracts/abi/ESGRegistryV2.json'
 
 /**
  * Contracts for the V2 hardened stack, or null when V2 isn't deployed on this
@@ -33,6 +35,14 @@ export function useV2Contracts(
     return {
       vault:     new Contract(stack.AssetVaultV2,  AssetVaultV2ABI,  runner),
       oracle:    new Contract(stack.GuardedOracle, GuardedOracleABI, runner),
+      /**
+        * #152：見證碳等級的來源（medianCarbonTier）。位址在 V2_STACK 裡是選用的
+        * ——#129 之前部署的 stack 沒有它——所以這裡可能是 null,呼叫端必須處理
+        * 「這條鏈有 V2 但沒有 ESGRegistryV2」這個狀態,不能假設有 V2 就有它。
+        */
+      esgRegistryV2: stack.ESGRegistryV2 && isDeployed(stack.ESGRegistryV2)
+        ? new Contract(stack.ESGRegistryV2, ESGRegistryV2ABI, runner)
+        : null,
       tokens:    stack.tokens,
       vaultAddr: stack.AssetVaultV2,
       oracleAddr: stack.GuardedOracle,

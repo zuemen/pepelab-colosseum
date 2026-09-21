@@ -8,6 +8,17 @@
  *
  */
 export const tokens = {
+  /**
+   * #152：資產詳情面板專屬的字。chip 層級的字（等級、筆數、離散度、各種讀不到
+   * 的狀態）住在 `esg.attested`,這裡只留面板自己需要的那幾句,不重複一份。
+   */
+  attested: {
+    title: '見證碳等級',
+    sourceNote: '鏈上見證的中位數',
+    feeNote: '這個等級決定本資產的鑄造費率：{fee}',
+    unratedNote: '未評等不是中性——它按最保守的等級定價。',
+  },
+
   /** TradingView 外嵌圖表區。symbol 寫死,見元件註解。 */
   title: '代幣化資產',
   // #136：Simple Mode 用「資產」——不需要知道底層是代幣化的 ERC-20 機制
