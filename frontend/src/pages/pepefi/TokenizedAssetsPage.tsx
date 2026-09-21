@@ -424,6 +424,20 @@ export default function TokenizedAssetsPage() {
   // displayRows.map() 裡面重新宣告），每列呼叫時傳 assetRow 進來。
   // `never` 分支是編譯期的窮舉檢查——AssetRowColumnKey 多一個值卻忘了在這裡
   // 加對應的 case，會在這裡直接編譯失敗，不會等到執行期才發現少畫一欄。
+  // #147：頭尾兩欄在橫向捲動時釘住。只有真的會捲的 Expert 需要——Simple 的
+  // 6 欄放得下,釘住只會讓它多兩道沒必要的底色邊界。
+  // 釘住的格子必須自己畫底色,否則捲過去的內容會從底下透出來——但底色要跟它
+  // 所在的那一列一致,不能表頭表身共用一個值:表頭是 background.neutral（見
+  // theme/core/components/table.tsx 的 MuiTableCell.head）,表身才是 paper。
+  // 兩者都塞 paper 的話,表頭的頭尾兩格會變成深色,跟中間幾格的灰色對不起來。
+  const stickyEdgeSx = (col: AssetRowColumnKey, row: 'head' | 'body') => {
+    if (mode !== 'expert') return {}
+    const bgcolor = row === 'head' ? 'background.neutral' : 'background.paper'
+    if (col === 'asset')   return { position: 'sticky' as const, left: 0,  zIndex: 2, bgcolor }
+    if (col === 'actions') return { position: 'sticky' as const, right: 0, zIndex: 2, bgcolor }
+    return {}
+  }
+
   const renderAssetCell = (col: AssetRowColumnKey, assetRow: AssetRow) => {
     const sym = assetRow.symbol as AssetSymbol
     switch (col) {
@@ -431,7 +445,9 @@ export default function TokenizedAssetsPage() {
         return (
           <Stack direction="row" spacing={1.25} alignItems="center">
             <AssetIcon symbol={assetRow.symbol} size={28} />
-            <Box sx={{ minWidth: 0 }}>
+            {/* #147：maxWidth 是下面那行 noWrap 的前提——沒有寬度上限,
+                「Synthetic iShares MSCI USA ESG ETF」這種長名稱會把整欄撐開。 */}
+            <Box sx={{ minWidth: 0, maxWidth: 220 }}>
               <Typography variant="subtitle2" sx={{ fontWeight: 'bold', lineHeight: 1.2 }}>
                 {assetRow.symbol}
               </Typography>
@@ -443,7 +459,7 @@ export default function TokenizedAssetsPage() {
         )
       case 'provenance':
         // #134：跟詳情層標題共用同一個摘要元件，不是長得像的兩份。
-        return <AssetProvenanceSummary tier={assetRow.tier} freshness={assetRow.freshness} />
+        return <AssetProvenanceSummary tier={assetRow.tier} freshness={assetRow.freshness} nowrap />
       case 'tradingFee':
         return `${(assetRow.tradingFeeBps / 100).toFixed(2)}%`
       case 'price':
@@ -696,12 +712,21 @@ export default function TokenizedAssetsPage() {
         </ToggleButtonGroup>
       </Stack>
 
+      {/* #147：Expert 的 9 欄在桌面寬度下放不進一個畫面,表格會橫向捲。捲到
+          中段時左邊看不到自己在哪一列、右邊看不到買進/贖回——而買賣正是這一頁
+          的主要動作。所以頭尾兩欄釘住,只讓中間的細節欄捲。
+          sticky 的格子必須自己畫底色,否則捲過去的內容會從底下透出來。 */}
       <TableContainer component={Card}>
         <Table>
           <TableHead>
             <TableRow>
               {columns.map((col) => (
-                <TableCell key={col} sx={{ fontWeight: 'bold' }}>{assetRowColumnLabelForMode(col, mode)}</TableCell>
+                // #147：表頭一律不換行。Expert 的 9 欄在桌面寬度下原本會把
+                // 「預言機更新時間」擠成四行、「買入費率」兩行,整條表頭因此變成
+                // 四倍高。欄寬不夠時讓 TableContainer 橫向捲,不要把字折斷。
+                <TableCell key={col} sx={{ ...stickyEdgeSx(col, 'head'), fontWeight: 'bold', whiteSpace: 'nowrap' }}>
+                  {assetRowColumnLabelForMode(col, mode)}
+                </TableCell>
               ))}
             </TableRow>
           </TableHead>
@@ -709,7 +734,18 @@ export default function TokenizedAssetsPage() {
             {displayRows.map((assetRow) => (
               <TableRow key={assetRow.symbol}>
                 {columns.map((col) => (
-                  <TableCell key={col} sx={MONO_COLUMNS.has(col) ? { fontFamily: MONO } : undefined}>
+                  // #147：`asset` 之外的每一格都不換行——原本「0.0000 sETH ≈ $0.00」、
+                  // 「0.04 / 1,000,000.00」、「8.0 天前」、資產 ID、操作欄的三顆按鈕
+                  // 全都會在欄寬不足時折行,每折一次整列就高一截。`asset` 例外是因為
+                  // 它自己用 noWrap + maxWidth 做截斷,不需要也不應該被撐開。
+                  <TableCell
+                    key={col}
+                    sx={{
+                      ...stickyEdgeSx(col, 'body'),
+                      ...(MONO_COLUMNS.has(col) ? { fontFamily: MONO } : {}),
+                      ...(col === 'asset' ? {} : { whiteSpace: 'nowrap' }),
+                    }}
+                  >
                     {renderAssetCell(col, assetRow)}
                   </TableCell>
                 ))}
@@ -731,7 +767,7 @@ export default function TokenizedAssetsPage() {
           overflowY: auto）。 */}
       {isDesktop && detailPanel && (
         <Box sx={{ width: 420, flexShrink: 0, position: 'sticky', top: 16 }}>
-          <Card sx={{ maxHeight: 'calc(100vh - 32px)', overflow: 'hidden' }}>
+          <Card sx={{ maxHeight: 'calc(100vh - 32px)', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
             {detailPanel}
           </Card>
         </Box>
@@ -744,7 +780,7 @@ export default function TokenizedAssetsPage() {
           anchor="bottom"
           open={!!detailPanel}
           onClose={closePanel}
-          slotProps={{ paper: { sx: { height: '100%', maxHeight: '100%' } } }}
+          slotProps={{ paper: { sx: { height: '100%', maxHeight: '100%', display: 'flex', flexDirection: 'column' } } }}
         >
           {detailPanel}
         </Drawer>

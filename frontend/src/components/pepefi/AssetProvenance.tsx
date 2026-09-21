@@ -63,13 +63,19 @@ export interface AssetProvenanceSummaryProps {
   tier: Tier
   /** 沒有值就不顯示——表示這一列還沒讀到價格新鮮度。 */
   freshness?: Freshness | null
+  /**
+   * #147：兩顆 chip 不換行。表格列要開（折行會讓每一列多一截高度,而欄寬不夠時
+   * 表格本來就會橫向捲,折字沒有換到任何好處）;詳情面板維持預設的會折——那裡
+   * 只有 420px 寬,不折會被裁掉。
+   */
+  nowrap?: boolean
 }
 
 /** 表格列與詳情層標題共用的兩顆摘要 chip：分級、價格新鮮度。 */
-export function AssetProvenanceSummary({ tier, freshness }: AssetProvenanceSummaryProps) {
+export function AssetProvenanceSummary({ tier, freshness, nowrap = false }: AssetProvenanceSummaryProps) {
   const tp = t.tokens.provenance
   return (
-    <Stack direction="row" spacing={0.75} alignItems="center" flexWrap="wrap" useFlexGap>
+    <Stack direction="row" spacing={0.75} alignItems="center" flexWrap={nowrap ? 'nowrap' : 'wrap'} useFlexGap>
       <Chip size="small" color={TIER_COLOR[tier]} variant="outlined" label={tp.carbonTier[tier]} />
       {freshness && (
         <Chip
