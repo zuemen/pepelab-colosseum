@@ -5,6 +5,9 @@ import {
   ResponsiveContainer, Tooltip as RadarTooltip,
 } from 'recharts';
 import { useContracts } from 'src/hooks/useContracts';
+import { useV2Contracts } from 'src/hooks/useV2Contracts';
+import { useCarbonTiers } from 'src/hooks/useCarbonTiers';
+import { AttestedTierChips } from 'src/components/pepefi/AttestedCarbonTier';
 import { usePepefiWallet } from 'src/layouts/pepefi';
 import { useESG } from 'src/hooks/useESG';
 import { ASSET_IDS } from 'src/contracts/addresses';
@@ -24,6 +27,12 @@ import Divider from '@mui/material/Divider';
 import Alert from '@mui/material/Alert';
 import LinearProgress from '@mui/material/LinearProgress';
 import ButtonBase from '@mui/material/ButtonBase';
+import Table from '@mui/material/Table';
+import TableBody from '@mui/material/TableBody';
+import TableCell from '@mui/material/TableCell';
+import TableContainer from '@mui/material/TableContainer';
+import TableHead from '@mui/material/TableHead';
+import TableRow from '@mui/material/TableRow';
 
 // ── All 11 asset IDs ──────────────────────────────────────────────────────────
 
@@ -111,6 +120,10 @@ export default function ESGPage() {
   const wallet = usePepefiWallet();
   const contracts   = useContracts(wallet.provider, wallet.signer, wallet.chainId);
   const { data: esg, loaded: esgLoaded, error: esgFailed } = useESG(contracts?.esgRegistry ?? null);
+  // #152：見證碳等級來自 V2 stack 的 ESGRegistryV2,跟上面那份舊評等是兩個不同
+  // 的合約、兩套不同的資料。刻意各自讀取、各自呈現,不在這裡合併成一個物件。
+  const v2 = useV2Contracts(wallet.provider, wallet.signer, wallet.chainId);
+  const carbonTiers = useCarbonTiers(v2?.esgRegistryV2 ?? null);
   const [selected, setSelected] = useState<string>(ASSET_IDS.sESGU);
 
   const isLoading = wallet.isConnected && wallet.chainId === 11155111 && !esgLoaded;
@@ -268,6 +281,72 @@ export default function ESGPage() {
           </Box>
         </Box>
       </Card>
+
+      {/* ── 見證碳等級（#152）──────────────────────────────────────────────────
+          刻意獨立成一張卡、夾在舊評等與逐資產排行之間:上面剛講完 AAA→CCC 是
+          什麼,這裡立刻說明「另外還有一套,講的是別的事」,兩者的對比讀得出來。
+          兩套資料不合併——舊評等講整體永續表現,見證碳等級講鏈上見證的定價
+          依據,來源與用途都不同。 */}
+      {/* 讀不到見證登記時整塊不渲染,不留任何提示：CONTEXT.md 的 The Vault 詞條
+          規定畫面不得出現「本網路尚未部署」這類訊息,而「沒有見證登記」跟「還沒
+          連錢包」在這裡會走到同一條路徑——兩者都不該被說成是關於這條鏈的結論。 */}
+      {!carbonTiers.unavailable && (
+      <Card sx={{ p: 3 }}>
+        <Typography variant="h6" sx={{ fontWeight: 'bold' }}>
+          {t.esg.attested.title}
+        </Typography>
+        <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+          {t.esg.attested.lead}
+        </Typography>
+
+        {/* 兩套資料的差別寫在這裡,不是寫在某個 tooltip 裡——這是整個區塊存在的
+            理由,不是補充說明。 */}
+        <Alert severity="info" variant="outlined" sx={{ mt: 2 }}>
+          {t.esg.attested.vsOld}
+        </Alert>
+
+        {carbonTiers.error ? (
+          // 讀失敗不能畫成「全部未評等」——那是一個結論,而這裡沒有結論。
+          <Alert severity="warning" variant="outlined" sx={{ mt: 2 }}>
+            {t.esg.attested.failed}
+          </Alert>
+        ) : (
+          <>
+            <TableContainer sx={{ mt: 2 }}>
+              <Table size="small">
+                <TableHead>
+                  <TableRow>
+                    <TableCell sx={{ fontWeight: 'bold', whiteSpace: 'nowrap' }}>{t.esg.attested.column.asset}</TableCell>
+                    <TableCell sx={{ fontWeight: 'bold', whiteSpace: 'nowrap' }}>{t.esg.attested.column.tier}</TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {ALL_ASSET_IDS.map((id) => {
+                    const meta = ASSET_META[id];
+                    return (
+                      <TableRow key={id}>
+                        <TableCell sx={{ whiteSpace: 'nowrap' }}>
+                          <Stack direction="row" spacing={1} alignItems="center">
+                            <Typography variant="body2" sx={{ fontSize: '1.1rem', lineHeight: 1 }}>{meta?.icon ?? '?'}</Typography>
+                            <Typography variant="body2" sx={{ fontWeight: 'bold' }}>{meta?.symbol ?? '—'}</Typography>
+                          </Stack>
+                        </TableCell>
+                        <TableCell>
+                          <AttestedTierChips
+                            attested={carbonTiers.data[id]}
+                            loading={!carbonTiers.loaded}
+                          />
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
+            </TableContainer>
+          </>
+        )}
+      </Card>
+      )}
 
       {/* ── B (left) + C (right) ─────────────────────────────────────────────── */}
       <Grid container spacing={3} alignItems="flex-start">

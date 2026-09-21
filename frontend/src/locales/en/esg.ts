@@ -4,6 +4,25 @@ import type { Catalog } from '../zh-TW';
  * 見 `../zh-TW/esg.ts`。
  */
 export const esg: Catalog['esg'] = {
+  /** 見 `../zh-TW/esg.ts`。 */
+  attested: {
+    title: 'Attested Carbon Tier',
+    lead: 'The Tier is itself the attested fact — recorded on chain by an Attestor alongside the basis they reached it on, not converted from a carbon intensity at read time. The vault prices its mint fee on this Tier.',
+    vsOld:
+      'The ESG rating above describes overall sustainability conduct (the composite of the E/S/G axes); this section describes the attested basis for pricing. Different sources, different purposes — shown side by side rather than merged into one score.',
+    column: {
+      asset: 'Asset',
+      tier: 'Attested tier',
+    },
+    countUnit: '{count} attestations',
+    noAttestations: 'No fresh attestations',
+    agree: 'Attestations agree',
+    apart: 'Attestations {n} tiers apart',
+    unrated: 'Unrated',
+    failed: 'Could not read the attestations — cannot confirm right now. This does not mean "unrated".',
+    loading: 'Reading attestations…',
+  },
+
   title: '🌱 ESG Asset Explorer',
   subtitle: 'Environmental · Social · Governance — 11 synthetic assets, on-chain registry',
 

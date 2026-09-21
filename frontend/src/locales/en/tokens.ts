@@ -4,6 +4,14 @@ import type { Catalog } from '../zh-TW';
  * 見 `../zh-TW/tokens.ts`。
  */
 export const tokens: Catalog['tokens'] = {
+  /** 見 `../zh-TW/tokens.ts`。 */
+  attested: {
+    title: 'Attested Carbon Tier',
+    sourceNote: 'Median across on-chain attestations',
+    feeNote: 'This tier sets the mint fee for this asset: {fee}',
+    unratedNote: 'Unrated is not neutral — it is priced at the most conservative tier.',
+  },
+
   title: 'Tokenized Assets',
   titleSimple: 'Assets',
   subtitle: 'ERC-20 Tokenized Assets',
