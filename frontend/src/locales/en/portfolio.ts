@@ -128,6 +128,12 @@ export const portfolio: Catalog['portfolio'] = {
   page: {
     title: 'My Portfolio',
     refresh: 'Refresh',
+
+    /** 見 `../zh-TW/portfolio.ts`。 */
+    tab: {
+      spot:      'Spot',
+      positions: 'Positions',
+    },
     connectWallet: 'Connect wallet to view your portfolio.',
 
     unsupportedNetwork: 'Unsupported Network',

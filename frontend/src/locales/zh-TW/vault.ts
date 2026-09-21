@@ -5,6 +5,16 @@ export const vault = {
   connectWallet: '連接錢包以使用 LP 保險金庫。',
   viewOnEtherscan: '在 Etherscan 查看 ↗',
 
+  /** #151：對齊 /tokens 的 Simple/Expert Mode 標題模式——Expert 講機制
+   *  （保險），Simple 拿掉那個字。 */
+  title: '保險金庫',
+  titleSimple: '金庫',
+  subtitle: '存入 USDC，賺取協議收益',
+
+  /** #151：Simple Mode 版的做市收益提示——不講 bps、不講機制，只講結果。
+   *  Expert 版仍用下面 markup.mmActiveLabel 那三句。 */
+  simpleYieldActive: '此金庫正在賺取交易手續費收益。',
+
   stat: {
     totalAssets: '總資產',
     sharePrice: '份額價格',

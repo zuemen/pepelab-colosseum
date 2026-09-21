@@ -28,7 +28,7 @@ export const traderDashboard = {
     stakeRequiredBody: '發布策略前需先質押至少 100 USDC。這能讓跟隨者相信你也承擔風險。',
     goToStake: '前往交易者質押 →',
 
-    empty: '點擊「+ 新增標的」以設定配置。',
+    empty: '點擊「+ 新增標的」以建立策略。',
 
     column: {
       asset: '標的',

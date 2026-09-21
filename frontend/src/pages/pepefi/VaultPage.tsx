@@ -5,6 +5,7 @@ import { parseUnits, formatUnits } from 'ethers'
 import { useContracts } from 'src/hooks/useContracts'
 import { usePepefiWallet } from 'src/layouts/pepefi'
 import { t, interpolate } from 'src/locales'
+import { useMode } from 'src/contexts/mode-context'
 import { prettyError } from 'src/lib/pepefi/errorMessages'
 import { safeRead } from 'src/lib/pepefi/safeRead'
 import Skeleton from 'src/components/pepefi/Skeleton'
@@ -18,6 +19,7 @@ import Card from '@mui/material/Card';
 import Grid from '@mui/material/Grid';
 import Stack from '@mui/material/Stack';
 import Button from '@mui/material/Button';
+import Alert from '@mui/material/Alert';
 import TextField from '@mui/material/TextField';
 import TableContainer from '@mui/material/TableContainer';
 import Table from '@mui/material/Table';
@@ -70,19 +72,19 @@ async function fetchActivity(vault: Contract): Promise<ActivityEntry[]> {
 
     for (const e of dep) {
       const args = (e as EventLog).args
-      events.push({ type: 'Deposited', label: t.vault.activity.deposited, amount: f18(args.usdcAmount) + ' USDT', from: args.user, block: e.blockNumber ?? 0 })
+      events.push({ type: 'Deposited', label: t.vault.activity.deposited, amount: f18(args.usdcAmount) + ' USDC', from: args.user, block: e.blockNumber ?? 0 })
     }
     for (const e of wit) {
       const args = (e as EventLog).args
-      events.push({ type: 'Withdrawn', label: t.vault.activity.withdrawn, amount: f18(args.usdcAmount) + ' USDT', from: args.user, block: e.blockNumber ?? 0 })
+      events.push({ type: 'Withdrawn', label: t.vault.activity.withdrawn, amount: f18(args.usdcAmount) + ' USDC', from: args.user, block: e.blockNumber ?? 0 })
     }
     for (const e of pro) {
       const args = (e as EventLog).args
-      events.push({ type: 'ProtocolDeposit', label: t.vault.activity.protocolDeposit, amount: f18(args.amount) + ' USDT', from: args.from, block: e.blockNumber ?? 0 })
+      events.push({ type: 'ProtocolDeposit', label: t.vault.activity.protocolDeposit, amount: f18(args.amount) + ' USDC', from: args.from, block: e.blockNumber ?? 0 })
     }
     for (const e of bai) {
       const args = (e as EventLog).args
-      events.push({ type: 'Bailout', label: t.vault.activity.bailout, amount: f18(args.amount) + ' USDT', from: args.trader, block: e.blockNumber ?? 0 })
+      events.push({ type: 'Bailout', label: t.vault.activity.bailout, amount: f18(args.amount) + ' USDC', from: args.trader, block: e.blockNumber ?? 0 })
     }
 
     events.sort((a, b) => b.block - a.block)
@@ -104,6 +106,8 @@ export default function VaultPage() {
   const [busy, setBusy]           = useState(false)
 
   const { notify } = useToast()
+  const { mode } = useMode()
+  const isExpert = mode === 'expert'
 
   const fetchStats = useCallback(async () => {
     if (!vault || !wallet.address) return
@@ -196,6 +200,16 @@ export default function VaultPage() {
   return (
     <Container maxWidth="md" sx={{ py: 3, display: 'flex', flexDirection: 'column', gap: 3 }}>
 
+      {/* #151: header aligned with /tokens' title/titleSimple + subtitle pattern. */}
+      <Box>
+        <Typography variant="h4" sx={{ fontWeight: 800 }}>
+          {mode === 'simple' ? t.vault.titleSimple : t.vault.title}
+        </Typography>
+        <Typography variant="body2" color="text.secondary">
+          {t.vault.subtitle}
+        </Typography>
+      </Box>
+
       {/* Stats */}
       <Grid container spacing={2}>
         {[
@@ -221,22 +235,31 @@ export default function VaultPage() {
         ))}
       </Grid>
 
-      {/* N1: trading-fee → LP routing (market-making yield) */}
+      {/* N1: trading-fee → LP routing (market-making yield).
+          #151: the bps/amount breakdown is mechanism detail (Expert only,
+          matching /tokens' health grid) — Simple gets one plain-language
+          line with no percentages, same split as /tokens' simpleReserve. */}
       {stats && stats.feeShareBps > ZERO && (
-        <Card sx={{ p: 2, bgcolor: 'background.neutral', borderLeft: '3px solid', borderColor: 'success.main' }}>
-          <Typography variant="body2" sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5, alignItems: 'baseline' }}>
-            <Box component="span" sx={{ fontWeight: 'bold', color: 'success.main' }}>
-              {t.vault.markup.mmActiveLabel}
-            </Box>
-            <Box component="span" sx={{ color: 'text.secondary' }}>
-              {interpolate(t.vault.markup.mmPctRouted, { pct: Number(stats.feeShareBps) / 100 })}
-            </Box>
-            <Box component="span" sx={{ fontFamily: MONO, fontWeight: 'bold' }}>
-              {interpolate(t.vault.markup.mmAmount, { amount: f18(stats.feesRouted) })}
-            </Box>
-            <Box component="span" sx={{ color: 'text.secondary' }}>{t.vault.markup.mmRoutedToDate}</Box>
-          </Typography>
-        </Card>
+        isExpert ? (
+          <Card sx={{ p: 2, bgcolor: 'background.neutral', borderLeft: '3px solid', borderColor: 'success.main' }}>
+            <Typography variant="body2" sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5, alignItems: 'baseline' }}>
+              <Box component="span" sx={{ fontWeight: 'bold', color: 'success.main' }}>
+                {t.vault.markup.mmActiveLabel}
+              </Box>
+              <Box component="span" sx={{ color: 'text.secondary' }}>
+                {interpolate(t.vault.markup.mmPctRouted, { pct: Number(stats.feeShareBps) / 100 })}
+              </Box>
+              <Box component="span" sx={{ fontFamily: MONO, fontWeight: 'bold' }}>
+                {interpolate(t.vault.markup.mmAmount, { amount: f18(stats.feesRouted) })}
+              </Box>
+              <Box component="span" sx={{ color: 'text.secondary' }}>{t.vault.markup.mmRoutedToDate}</Box>
+            </Typography>
+          </Card>
+        ) : (
+          <Alert severity="success" variant="outlined">
+            {t.vault.simpleYieldActive}
+          </Alert>
+        )
       )}
 
       {/* Your position */}
@@ -403,11 +426,15 @@ export default function VaultPage() {
                         {a.amount}
                       </Typography>
                     </TableCell>
-                    <TableCell align="right">
-                      <Typography variant="caption" color="text.secondary" sx={{ fontFamily: MONO }}>
-                        {interpolate(t.vault.activity.block, { block: a.block })}
-                      </Typography>
-                    </TableCell>
+                    {/* #151: block number is chain-internals detail — Expert only,
+                        same split as /tokens' priceUpdatedAt/assetId columns. */}
+                    {isExpert && (
+                      <TableCell align="right">
+                        <Typography variant="caption" color="text.secondary" sx={{ fontFamily: MONO }}>
+                          {interpolate(t.vault.activity.block, { block: a.block })}
+                        </Typography>
+                      </TableCell>
+                    )}
                   </TableRow>
                 ))}
               </TableBody>
@@ -416,17 +443,22 @@ export default function VaultPage() {
         )}
       </Card>
 
-      {/* Info box */}
-      <Card sx={{ p: 2.5, bgcolor: 'background.neutral' }}>
-        <Stack spacing={1}>
-          <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
-            <Box component="span" sx={{ color: 'text.primary', fontWeight: 'bold' }}>{t.vault.markup.howItWorksLabel}</Box>{t.vault.markup.howItWorksBody}<Box component="span" sx={{ fontWeight: 'bold' }}>{t.vault.markup.liquidationPenaltyLabel}</Box>{t.vault.markup.howItWorksCodeWrap}<code>liquidationPenaltyBps</code>{t.vault.markup.howItWorksTail}
-          </Typography>
-          <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
-            {t.vault.markup.badDebtBefore}<code>BadDebt</code>{t.vault.markup.badDebtMid}<code>recapitalize()</code>{t.vault.markup.badDebtAfter}
-          </Typography>
-        </Stack>
-      </Card>
+      {/* Info box — #151: names contract fields (liquidationPenaltyBps, BadDebt,
+          recapitalize()), which is mechanism detail barred from Simple Mode
+          (frontend/CONTEXT.md's Mode entry) — Expert only, same as /tokens'
+          protectionsList accordion. */}
+      {isExpert && (
+        <Card sx={{ p: 2.5, bgcolor: 'background.neutral' }}>
+          <Stack spacing={1}>
+            <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
+              <Box component="span" sx={{ color: 'text.primary', fontWeight: 'bold' }}>{t.vault.markup.howItWorksLabel}</Box>{t.vault.markup.howItWorksBody}<Box component="span" sx={{ fontWeight: 'bold' }}>{t.vault.markup.liquidationPenaltyLabel}</Box>{t.vault.markup.howItWorksCodeWrap}<code>liquidationPenaltyBps</code>{t.vault.markup.howItWorksTail}
+            </Typography>
+            <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
+              {t.vault.markup.badDebtBefore}<code>BadDebt</code>{t.vault.markup.badDebtMid}<code>recapitalize()</code>{t.vault.markup.badDebtAfter}
+            </Typography>
+          </Stack>
+        </Card>
+      )}
     </Container>
   )
 }
