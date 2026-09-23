@@ -8,6 +8,7 @@ import {
   stepTowards,
   deviationAccepted,
   guardDeviation,
+  nonceTracker,
 } from "./core.ts";
 
 // ── parseFeedValue：拒絕垃圾,不夾擠 ──────────────────────────────────────
@@ -158,5 +159,30 @@ assert.equal(guardDeviation({ target: 933, current: 311 }).write, false);
 // 非法 target 一律不寫。
 assert.equal(guardDeviation({ target: 0, current: 100 }).write, false);
 assert.equal(guardDeviation({ target: Number.NaN, current: 100 }).write, false);
+
+// ── nonceTracker：公共 RPC 落後時不撞號 ─────────────────────────────────
+// 2026-09-23 22:21Z 真實發生：sICLN 用 nonce 35 上鏈後，下一次問到的節點還回
+// pending=35，sESGU 也拿 35 → "replacement fee too low"。
+{
+  const answers = [34, 35, 35];
+  const t = nonceTracker(async () => answers.shift()!);
+  assert.equal(await t.next(), 34);
+  t.sent(34);
+  assert.equal(await t.next(), 35);
+  t.sent(35);
+  assert.equal(await t.next(), 36, "節點落後回 35 時要用本地的 36，不能撞號");
+}
+// 同一把鑰匙有別人送交易（鏈上跑得比本地快）→ 跟鏈上走。
+{
+  const t = nonceTracker(async () => 50);
+  t.sent(40);
+  assert.equal(await t.next(), 50);
+}
+// 送出失敗（沒呼叫 sent）→ 不前進，下一筆重用同一個 nonce，不留空洞。
+{
+  const t = nonceTracker(async () => 7);
+  assert.equal(await t.next(), 7);
+  assert.equal(await t.next(), 7);
+}
 
 console.log("core.test.ts ✓ all assertions passed");

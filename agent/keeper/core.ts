@@ -192,3 +192,29 @@ export function stepTowards(
   const min = (current8 * 10_000n) / (10_000n + bps) + 1n;
   return target8 >= min ? target8 : min;
 }
+
+export interface NonceTracker {
+  /** 下一筆該用的 nonce：鏈上 pending 與本地紀錄取大者。 */
+  next(): Promise<number>;
+  /** 交易已送出（不論之後成功或 revert，nonce 都已用掉）才呼叫。 */
+  sent(nonce: number): void;
+}
+
+/**
+ * 本地追蹤 nonce。sepolia.base.org 是負載平衡，剛上鏈的交易下一次可能問到還
+ * 沒看到它的節點；讓 ethers 每筆都去問 pending nonce，就會拿到重複的值
+ * （2026-09-23 sICLN 與 sESGU 都拿到 35，第二筆 "replacement fee too low"）。
+ * 取 max(鏈上, 本地)：本地值擋住落後節點，鏈上值吸收同一把鑰匙在別處送的交易。
+ */
+export function nonceTracker(getPending: () => Promise<number>): NonceTracker {
+  let local: number | null = null;
+  return {
+    async next() {
+      const chain = await getPending();
+      return local === null ? chain : Math.max(chain, local);
+    },
+    sent(nonce) {
+      local = nonce + 1;
+    },
+  };
+}

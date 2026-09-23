@@ -20,6 +20,8 @@ import {
   stepTowards,
   deviationAccepted,
   guardDeviation,
+  nonceTracker,
+  type NonceTracker,
   DEFAULT_MAX_DEVIATION,
   DEFAULT_REJECT_DEVIATION,
   type ParsedFeed,
@@ -117,6 +119,17 @@ async function fetchFromRelay(
   }
 }
 
+// 所有送交易的地方共用：nonce 在本地遞增，不讓 ethers 每筆去問可能落後的公共節點。
+// DRY_RUN 不送交易，維持 null。
+let nonces: NonceTracker | null = null;
+
+async function withNonce<T>(send: (overrides: { nonce: number }) => Promise<T>): Promise<T> {
+  const nonce = await nonces!.next();
+  const tx = await send({ nonce });
+  nonces!.sent(nonce);
+  return tx;
+}
+
 async function main(): Promise<void> {
   // batchMaxCount:1 —— 公共節點對 JSON-RPC batch 的處理不穩，逐筆送最可靠。
   const provider = new ethers.JsonRpcProvider(
@@ -143,6 +156,7 @@ async function main(): Promise<void> {
       console.error(`::error::keeper 錢包在 ${CHAIN} 上餘額為 0，無法送出任何交易`);
       process.exit(1);
     }
+    nonces = nonceTracker(() => provider.getTransactionCount(signer.address, "pending"));
   }
 
   const oracle = new ethers.Contract(ORACLE_ADDR, ORACLE_ABI, signer ?? provider);
@@ -244,7 +258,7 @@ async function main(): Promise<void> {
 
     const price8 = toPrice8(guard.value);
     try {
-      const tx = await oracle.updatePrice(assetId, price8);
+      const tx = await withNonce((o) => oracle.updatePrice(assetId, price8, o));
       await tx.wait();
       wrote += 1;
       console.log(`  → MockOracle ✓ ${tx.hash}`);
@@ -350,7 +364,7 @@ async function observeVaultReserve(
   }
 
   try {
-    const tx = await vault.observeReserve();
+    const tx = await withNonce((o) => vault.observeReserve(o));
     const receipt = await tx.wait();
     console.log(`  → observeReserve() ✓ ${tx.hash}`);
 
@@ -427,7 +441,7 @@ async function mirror(
       return false;
     }
 
-    const tx = await guarded.updatePrice(assetId, next);
+    const tx = await withNonce((o) => guarded.updatePrice(assetId, next, o));
     await tx.wait();
     const partial = next !== target8 ? "（分段逼近，下一輪繼續）" : "";
     console.log(`  → GuardedOracle ✓ ${next} ${partial}`);
