@@ -57,6 +57,7 @@ export const agentMode: Catalog['agentMode'] = {
     button: 'Simulate over-cap order',
     noSession: 'At least one session is needed to run this.',
     rejected: 'Rejected by the contract: {reason}',
+    simulationFailed: 'Could not simulate this order (network or RPC error, not a contract rejection): {reason}',
     accepted: 'The contract did not reject it — this should not happen, please report it.',
   },
 

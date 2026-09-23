@@ -49,12 +49,13 @@ jobs:
 
       # GitHub Pages has no SPA rewrites: serve index.html for unknown paths so
       # deep links load the app. 404.html alone still answers with HTTP 404, which
-      # link checkers and previews treat as broken, so the judge entry point also
-      # gets its own copy (Pages serves /agent-mode from agent-mode.html with 200).
+      # link checkers and previews treat as broken, so every page a judge can open
+      # without a wallet (PUBLIC_PATHS in layouts/pepefi/index.tsx) gets its own
+      # copy; Pages serves /agent-mode from agent-mode.html with 200.
       - name: SPA fallback
         run: |
           cp dist/index.html dist/404.html
-          cp dist/index.html dist/agent-mode.html
+          for r in agent-mode x402 marketplace; do cp dist/index.html "dist/$r.html"; done
 
       - uses: actions/upload-pages-artifact@v3
         with:

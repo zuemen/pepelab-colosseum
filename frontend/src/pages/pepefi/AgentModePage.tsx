@@ -30,6 +30,7 @@ import CircularProgress from '@mui/material/CircularProgress'
 
 import { t, interpolate } from 'src/locales'
 import { getAddresses, ASSET_IDS, PRIMARY_CHAIN_ID } from 'src/contracts/addresses'
+import { classifySimulationFailure } from 'src/lib/pepefi/simulationOutcome'
 import { getSessionManagerAddress } from 'src/contracts/sessionManager'
 import AgentSessionManagerABI from 'src/contracts/abi/AgentSessionManager.json'
 import { deployBlock, describeScanWindow } from 'src/lib/pepefi/chainLogs'
@@ -93,12 +94,6 @@ interface ActivityRow { tx: string; block: number; session: number; text: string
 interface TryResult { kind: 'rejected' | 'accepted' | 'error'; text: string }
 
 const fmt18 = (v: bigint) => Number(ethers.formatUnits(v, 18))
-
-/** eth_call 的 revert 資料在 ethers v6 會放在不同欄位，依序找。 */
-function revertData(e: unknown): string | undefined {
-  const err = e as { data?: string; info?: { error?: { data?: string } }; error?: { data?: string } }
-  return err.data ?? err.info?.error?.data ?? err.error?.data
-}
 
 function statusOf(s: SessionRow, now: number): 'active' | 'revoked' | 'expired' {
   if (s.revoked) return 'revoked'
@@ -209,10 +204,9 @@ export default function AgentModePage() {
         await provider.call({ from: sandbox.agent, to: managerAddr, data, value: fee })
         setTryResult((r) => ({ ...r, [key]: { kind: 'accepted', text: t.agentMode.tryIt.accepted } }))
       } catch (e) {
-        const raw = revertData(e)
-        const parsed = raw ? iface.parseError(raw) : null
-        const reason = parsed ? `${parsed.name}(${parsed.args.map(String).join(', ')})` : (e as Error).message
-        setTryResult((r) => ({ ...r, [key]: { kind: 'rejected', text: interpolate(t.agentMode.tryIt.rejected, { reason }) } }))
+        const outcome = classifySimulationFailure(e, iface)
+        const template = outcome.kind === 'rejected' ? t.agentMode.tryIt.rejected : t.agentMode.tryIt.simulationFailed
+        setTryResult((r) => ({ ...r, [key]: { kind: outcome.kind, text: interpolate(template, { reason: outcome.reason }) } }))
       }
     } catch (e) {
       setTryResult((r) => ({ ...r, [key]: { kind: 'error', text: (e as Error).message } }))
