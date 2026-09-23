@@ -2,7 +2,7 @@
 
 ### Issue tracker
 
-Issues are tracked in GitHub Issues (zuemen/pepelab_onchain_cfd), via the `gh` CLI. See `docs/agents/issue-tracker.md`.
+Issues are tracked in GitHub Issues (zuemen/pepelab-colosseum), via the `gh` CLI. **Never create, comment on, or edit issues in the original repo zuemen/pepelab_onchain_cfd** — this is a competition-only import. See `docs/agents/issue-tracker.md`.
 
 ### Triage labels
 
