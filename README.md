@@ -6,7 +6,7 @@ Built for the Colosseum Crypto World's Fair (Base track). **Submission write-up:
 
 ## See it in 3 minutes
 
-1. Open the frontend at **`/agent-mode`**; no wallet is needed. It shows x402 payments, session caps and agent actions, read straight from Base Sepolia. The **Try it** button simulates the session's agent placing an over-cap or off-list order, and shows the contract's own revert.
+1. Open **https://zuemen.github.io/pepelab-colosseum/agent-mode**; no wallet is needed. It shows x402 payments, session caps and agent actions, read straight from Base Sepolia. The **Try it** button simulates the session's agent placing an over-cap or off-list order, and shows the contract's own revert.
 2. Or read [`demo/RUN.md`](demo/RUN.md): eight steps and ten on-chain transactions from three separate keys, each linked to BaseScan. Two of the transactions are orders **mined and reverted** by the contract: one over the cap, one after revocation.
 
 ## How it works

@@ -4,6 +4,8 @@
 
 Colosseum Crypto World's Fair · Base track · repo `zuemen/pepelab-colosseum` · all contracts on **Base Sepolia (84532)**.
 
+**Live, no wallet needed:** https://zuemen.github.io/pepelab-colosseum/agent-mode
+
 ---
 
 ## 1. Problem
