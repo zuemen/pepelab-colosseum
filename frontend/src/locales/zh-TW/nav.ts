@@ -25,6 +25,7 @@ export const nav = {
     rewards: '獎勵 🎁',
     sessions: '🤖 Agent 委任',
     agentMonitor: '📊 Agent 監控',
+    agentMode: '🤖 Agent Mode',
     traderDashboard: '交易者主頁',
     stake: '質押',
   },

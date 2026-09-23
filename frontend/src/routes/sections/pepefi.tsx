@@ -34,6 +34,7 @@ const AdminKYCPage      = lazy(() => import('src/pages/pepefi/AdminKYCPage'));
 const RewardsPage       = lazy(() => import('src/pages/pepefi/RewardsPage'));
 const SessionsPage      = lazy(() => import('src/pages/pepefi/SessionsPage'));
 const AgentMonitorPage  = lazy(() => import('src/pages/pepefi/AgentMonitorPage'));
+const AgentModePage     = lazy(() => import('src/pages/pepefi/AgentModePage'));
 const PepeLabPage       = lazy(() => import('src/pages/pepefi/PepeLabPage'));
 
 // ----------------------------------------------------------------------
@@ -99,6 +100,7 @@ export const pepefiRoutes: RouteObject[] = [
           { path: 'rewards', element: <RewardsPage /> },
           { path: 'sessions', element: <SessionsPage /> },
           { path: 'agent-monitor', element: <AgentMonitorPage /> },
+          { path: 'agent-mode', element: <AgentModePage /> },
           { path: 'x402', element: <X402DocsPage /> },
           { path: 'pepe',    element: <PepeLabPage /> },
         ],

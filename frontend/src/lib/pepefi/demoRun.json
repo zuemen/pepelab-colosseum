@@ -1,0 +1,97 @@
+{
+  "generatedAt": "2026-09-23T11:34:58.543Z",
+  "user": "0x2F188C934ffFa25D2af8354eb18fAE65038F5467",
+  "agent": "0xd3c6a11ef5aF3D197Ecd0C9C44B15a23138d0EB7",
+  "seller": "0xB4a1EEF4bF5d3D7C8d9058f10A23f98D08f4e7b2",
+  "sessionManager": "0x71125e25c903AD4e198e1863d5Bf26df97926CDe",
+  "exchange": "0xC45dEd77F4A30658e3c52E6fB4809E502e3D3B0E",
+  "sessionId": 2,
+  "caps": {
+    "perTrade": 50,
+    "budget": 150,
+    "leverage": 3,
+    "assets": [
+      "sBTC",
+      "sETH"
+    ]
+  },
+  "steps": [
+    {
+      "n": "①a",
+      "actor": "User",
+      "action": "faucet + approve + depositMargin 200 mUSDC",
+      "tx": "0x0fbf1414140caf2ea96f43605a396afbe63cfc4816de6c4475fc57c9307be882",
+      "result": "margin deposited"
+    },
+    {
+      "n": "①b",
+      "actor": "User",
+      "action": "createSessionWithAssets(agent, perTrade 50, budget 150, 3x, 7d, [sBTC,sETH])",
+      "tx": "0xf466546f5a9e56d33a2a96f7a34ea1a80709b617b2e4bec5a4da6f4c3761f033",
+      "result": "session #2"
+    },
+    {
+      "n": "②",
+      "actor": "User",
+      "action": "sign EIP-712 authorization VC (did:pkh issuer → agent)",
+      "tx": null,
+      "result": "VC valid — saved demo/out/vc-session-2.json"
+    },
+    {
+      "n": "③a",
+      "actor": "Agent",
+      "action": "x402 GET /oracle/sBTC (402 → EIP-3009 USDC → 200)",
+      "tx": "0xfd4443afa58df6e8e0f8294f0931bd479d53e47713e98c6aa7c0f8da786055e1",
+      "result": "HTTP 200; funding 0 bps → long"
+    },
+    {
+      "n": "③b",
+      "actor": "Agent",
+      "action": "x402 GET /signals/0x2F188C93… (trader signal, 0.01 USDC)",
+      "tx": "0x49bbec0fda3c1a1fda284b8f3dd71a7b81c037b241cf53936bd632b727436259",
+      "result": "HTTP 200"
+    },
+    {
+      "n": "③c",
+      "actor": "Seller",
+      "action": "routeExternalRevenue(trader = User, 0.01 USDC) on the x402 FeeRouter",
+      "tx": "0x95f09cec399b86977d4e314df546f2e64ab5aadf8982e37e82e5f6f48f2cd5ae",
+      "result": "70/20/10 split on chain; trader's accrued earnings now 0.007 USDC"
+    },
+    {
+      "n": "④",
+      "actor": "Agent",
+      "action": "openPositionForSession(#2, sBTC, long, 20, 2x)",
+      "tx": "0xa61ade4c4a9e40e4edb6643f0b4f8a9da074223bc6040251f4b1a032824f7a73",
+      "result": "position #2"
+    },
+    {
+      "n": "⑤",
+      "actor": "Agent",
+      "action": "openPositionForSession margin 80 > cap 50",
+      "tx": "0x547c47705dd81428395be332c30eefef4533ed0ed14d30aff01d7dfba46022b0",
+      "result": "reverted on chain: MarginExceedsPerTradeCap"
+    },
+    {
+      "n": "⑥",
+      "actor": "Agent",
+      "action": "closePositionForSession(#2, position #2)",
+      "tx": "0x9b47410da623443124ccfbfd5f09ade0cb2e007d2d6f995163011b316f630853",
+      "result": "closed"
+    },
+    {
+      "n": "⑦",
+      "actor": "User",
+      "action": "revokeSession(#2)",
+      "tx": "0xb8f0a0bd46b1cbbcb21004ed1d5a2c4da8fe47e4d967a9c0a9f899462aee7553",
+      "result": "session revoked"
+    },
+    {
+      "n": "⑧",
+      "actor": "Agent",
+      "action": "openPositionForSession after revoke (margin 20, within caps)",
+      "tx": "0x5a071cab849a087dc1a2d3c280999d95a617b0c56104fde691fd0013c60b95ea",
+      "result": "reverted on chain: SessionIsRevoked"
+    }
+  ]
+}

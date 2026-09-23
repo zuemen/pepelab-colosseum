@@ -22,6 +22,7 @@ import { rewards } from './rewards';
 import { sessions } from './sessions';
 import { exchange } from './exchange';
 import { terminal } from './terminal';
+import { agentMode } from './agentMode';
 import { portfolio } from './portfolio';
 import { freshness } from './freshness';
 import { marketplace } from './marketplace';
@@ -54,6 +55,7 @@ const en: Catalog = {
   pepe,
   pepeStageSkins,
   x402,
+  agentMode,
   whale,
   rewards,
   esg,

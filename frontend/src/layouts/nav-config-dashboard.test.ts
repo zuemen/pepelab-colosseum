@@ -24,8 +24,9 @@ describe('navDataForMode — simple', () => {
     expect(simple).toHaveLength(1)
   })
 
-  it('恰好 8 個側邊欄入口——其餘 3 個 Simple 頁面(Landing / Copy / TraderProfile)不在側邊欄', () => {
-    expect(simplePaths).toHaveLength(8)
+  it('恰好 9 個側邊欄入口（Colosseum 版多了 Agent Mode）——其餘 3 個 Simple 頁面(Landing / Copy / TraderProfile)不在側邊欄', () => {
+    expect(simplePaths).toHaveLength(9)
+    expect(simplePaths[0]).toBe(paths.pepefi.agentMode)
   })
 
   it('投資人視角需要的入口都在', () => {

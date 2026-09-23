@@ -23,7 +23,8 @@ import { LoadingScreen } from 'src/components/loading-screen';
 //   - 刷新頁面時 useWallet 會先做靜默 session 恢復（initializing），
 //     守衛等它完成才判斷，避免已連線用戶刷新內頁被誤踢回 landing。
 
-const PUBLIC_PATHS = ['/', '/x402', '/marketplace'];
+// /agent-mode is public on purpose: it is the judge-facing page and needs no wallet.
+const PUBLIC_PATHS = ['/', '/x402', '/marketplace', '/agent-mode'];
 const AFTER_CONNECT_PATH = '/portfolio';
 
 export function PepefiLayout() {

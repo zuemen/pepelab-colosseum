@@ -43,7 +43,7 @@ describe('blocksForSeconds', () => {
 
 describe('deployBlock', () => {
   it('Base Sepolia 用自己的部署塊,不是 Ethereum Sepolia 的 10,874,200', () => {
-    expect(deployBlock(84532)).toBe(42_838_953)
+    expect(deployBlock(84532)).toBe(47_194_407)
     expect(deployBlock(11155111)).toBe(10_874_200)
     expect(deployBlock(84532)).not.toBe(deployBlock(11155111))
   })
@@ -56,19 +56,19 @@ describe('deployBlock', () => {
 
 describe('scanFromBlock', () => {
   it('部署塊很久以前時,滾動視窗把起點夾住', () => {
-    // 這正是 F-3 的病徵：Base Sepolia 部署在 42.8M，現在是 48M，
+    // 這正是 F-3 的病徵：部署塊（pepelab-colosseum 為 47.19M）遠早於現在的高度，
     // 直接從部署塊掃就是 5M 塊 ÷ 9,900 = 500 多次 getLogs。
     const currentBlock = 48_000_000
     const from = scanFromBlock({ chainId: 84532, currentBlock })
-    expect(from).toBeGreaterThan(42_838_953)
+    expect(from).toBeGreaterThan(47_194_407)
     // 7 天 ÷ 2 秒 = 302,400 塊
     expect(from).toBe(currentBlock - 302_400)
   })
 
   it('剛部署不久的鏈不會掃到部署塊之前的空白區', () => {
-    const currentBlock = 42_900_000 // 部署後約 61k 塊
+    const currentBlock = 47_250_000 // 部署後約 56k 塊
     const from = scanFromBlock({ chainId: 84532, currentBlock })
-    expect(from).toBe(42_838_953)
+    expect(from).toBe(47_194_407)
   })
 
   it('未知的鏈仍然有界——純滾動視窗', () => {

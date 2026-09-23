@@ -57,6 +57,8 @@ export const navData: NavSectionProps['data'] = [
       // 順序＝平台想被理解的順序：先看自己的資產配置，再去買賣代幣化資產，
       // 然後才是跟單與其他。永續終端機（terminal）排到最後、緊鄰 agent 工具，
       // 因為它現在是進階功能，不是門面。
+      // Colosseum 參賽版：Agent Mode 放最上面——評審第一眼要看到的是 agent 在鏈上做了什麼。
+      { title: t.nav.item.agentMode, path: paths.pepefi.agentMode, icon: ICONS.dashboard },
       { title: t.nav.item.portfolio, path: paths.pepefi.portfolio, icon: ICONS.analytics },
       { title: t.nav.item.tokens, path: paths.pepefi.tokens, icon: ICONS.product },
       { title: t.nav.item.exchange, path: paths.pepefi.exchange, icon: ICONS.ecommerce },
@@ -109,6 +111,7 @@ export const navData: NavSectionProps['data'] = [
 //
 // terminal 不在這裡，而且是刻意的：simple 模式就是「沒有槓桿的那一版」。
 const SIMPLE_NAV_PATHS: readonly string[] = [
+  paths.pepefi.agentMode,
   paths.pepefi.portfolio,
   paths.pepefi.marketplace,
   paths.pepefi.tokens,

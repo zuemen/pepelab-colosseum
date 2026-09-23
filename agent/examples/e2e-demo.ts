@@ -24,7 +24,8 @@
 //   BASE_SEPOLIA_RPC_URL, X402_API_URL            (defaults: public RPC, localhost:4021)
 //   SESSION_MANAGER_ADDRESS                       (defaults to addresses.ts value below)
 //
-// Writes demo/RUN.md (tx table) and demo/out/<timestamp>.json (raw record).
+// Writes demo/RUN.md (tx table), frontend/src/lib/pepefi/demoRun.json (shown on the
+// Agent Mode page) and demo/out/<timestamp>.json (raw record).
 //
 //   cd agent && npx tsx examples/e2e-demo.ts
 import { ethers } from "ethers";
@@ -265,6 +266,15 @@ async function main() {
     "",
   ].join("\n");
   writeFileSync(resolve(REPO, "demo/RUN.md"), md);
+  // The frontend Agent Mode page shows this run, because reverted transactions emit
+  // no events and so cannot be recovered from logs later.
+  const seller = process.env.SELLER_PRIVATE_KEY?.trim() ? new ethers.Wallet(process.env.SELLER_PRIVATE_KEY.trim()).address : null;
+  writeFileSync(resolve(REPO, "frontend/src/lib/pepefi/demoRun.json"), JSON.stringify({
+    generatedAt: stamp, user: user.address, agent: agent.address, seller,
+    sessionManager: SESSION_MANAGER, exchange: ADDRESSES.PerpetualExchange, sessionId,
+    caps: { perTrade: CAP_PER_TRADE, budget: CAP_BUDGET, leverage: CAP_LEVERAGE, assets: ["sBTC", "sETH"] },
+    steps,
+  }, null, 2) + "\n");
   console.log(`\nWrote demo/RUN.md`);
 }
 

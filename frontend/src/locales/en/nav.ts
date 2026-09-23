@@ -23,6 +23,7 @@ export const nav: Catalog['nav'] = {
     rewards: 'Rewards 🎁',
     sessions: '🤖 Agent Sessions',
     agentMonitor: '📊 Agent Monitor',
+    agentMode: '🤖 Agent Mode',
     traderDashboard: 'Trader Dashboard',
     stake: 'Stake',
   },
