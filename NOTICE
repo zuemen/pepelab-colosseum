@@ -1,0 +1,10 @@
+Third-party components
+
+- frontend/ scaffolding (layout, theme, UI components) originates from the
+  Minimals starter kit "@minimal-kit/starter-vite-ts" and remains under its
+  own license terms. The MIT license in LICENSE covers this project's own code.
+- contracts/lib/: forge-std (MIT OR Apache-2.0), OpenZeppelin Contracts and
+  OpenZeppelin Contracts Upgradeable (MIT).
+- The key 0xac0974…ff80 in contracts/.env.example, deploy-anvil.sh and
+  seed-anvil.sh is Anvil's public default development key (account #0). It is
+  not a secret and holds nothing on any public network.
