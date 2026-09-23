@@ -28,36 +28,32 @@ A proof-of-concept perpetual CFD (Contract for Difference) protocol deployed on 
 
 ## Deployed Contracts (Base Sepolia)
 
-Source of truth: `frontend/src/contracts/addresses.ts`
+Source of truth: `frontend/src/contracts/addresses.ts`. This is **pepelab-colosseum's own deployment**
+(2026-09-23, deployer `0xB98BA27B…3a02`); it shares no contract with the original
+pepelab_onchain_cfd deployment. Details and on-chain verification: [`HACKATHON.md`](HACKATHON.md).
 
 | Contract | Address |
 |---|---|
-| PerpetualExchange | `0xef75eca6514ce96b18382e921ac6190a0cf8c072` |
-| MockOracle | `0xed90c4f3b48213888870c1fc8486921cb0990aa3` |
-| InsuranceVault | `0xb364e2e3e1e7a2b033ef03a4accef42066f3d812` |
-| FeeRouter | `0x00f6cf0113399a7a451c7f85fe094a28092d3e0c` |
-| MockUSDC | `0x69fd695bc7c3afdb35aba35cd6890c506400b035` |
-| MockSwapRouter | `0xc9b0e5c219aa1b3eb00e92fd9a883b182f0ae8ae` |
-| CopyTracker | `0x96357144fe56c5e0e33e8046be2a63f45528b210` |
-| StrategyRegistry | `0x54e8c43f9eb151bb8dd6e61d16a969c4d0e73915` |
-| TraderStake | `0x01aeb530bcfc69f036309ffe55acc7ea6c5a28fe` |
-| AgentSessionManager | `0x4E7cC1B79B72ab72531a6C790e14304370f70764` |
-| KYCRegistry | `0x5d95fd9e7a5f80e5369e24783f1f98e0f952360d` |
+| PerpetualExchange | `0xC45dEd77F4A30658e3c52E6fB4809E502e3D3B0E` |
+| AgentSessionManager | `0x71125e25c903AD4e198e1863d5Bf26df97926CDe` |
+| MockOracle | `0x7c7FD43376738151a09719Ab5B33962a77dfBb49` |
+| InsuranceVault | `0x42b9503E4AEf7A347DB75E54d32230720D1dd4f0` |
+| FeeRouter | `0x91E4aC532201Fc67C715Aa202B6Fe85F51b34994` |
+| MockUSDC | `0x0910e965B06845BD3871860d522952a44a574058` |
+| MockSwapRouter | `0xCebdae595260F31541E44FBFfC80614d8B73C87a` |
+| CopyTracker | `0xF19E53dDBbD6CfDFb50deF952CA5f956ed08d0C4` |
+| StrategyRegistry | `0x6Af6BEBC8fF0CE354e6E8A97921E1C5Ea95a7DE8` |
+| TraderStake | `0x790fd51ad485013C5b87FD7765679461675A31FD` |
+| KYCRegistry | `0x34D644b9d58c1D4B0Cb805BA49440F53Ca0378d0` |
+| x402 FeeRouter (Circle USDC) | `0xEeDcEE7cD62A644EA4Cf053f213d5D75dB0B49c6` |
 
-> **AgentSessionManager 位址更正（2026-08-06）**：本表先前寫舊的
-> `0x5Ebcc64C712C5a26119789dCbD0753981dc518E8`，與前端／agent 實際使用的位址不符。
-> 舊 manager **沒有 per-session 資產白名單**，照舊值建 session 等於少一道資產閘門。
-> 舊 manager 目前仍在 exchange 的 `authorizedAgents` 名單中且從未撤權。
+The exchange authorizes exactly one agent contract — the AgentSessionManager above.
 
 ## Features
 
 - **Long / Short positions** with configurable leverage (1×–5×, per-asset overrides)
-- **Funding rate** — OI-imbalance driven, 0.75% cap per interval.
-  Source 的 `FUNDING_INTERVAL` 是 **8h**（→ 2.25%/日上限），但 ⚠️ **已部署的
-  bytecode 仍是 300 秒（5 分鐘）**：2026-08-06 對 `0xEf75…c072` 實測
-  `FUNDING_INTERVAL() = 300`，同樣的 0.75% 上限在 5 分鐘週期下是 **≈216%/日**。
-  `FUNDING_INTERVAL` 是 `constant`，改 source 不會改動已部署的合約 ——
-  **必須重新部署 exchange 才會生效**。在那之前不要以 8h 的數字向任何人描述本協議。
+- **Funding rate** — OI-imbalance driven, 0.75% cap per 8-hour interval
+  (on-chain `FUNDING_INTERVAL()` = 28800, read 2026-09-23 → 2.25%/day cap).
 - **Liquidation engine** — permissionless, 5% maintenance margin, liquidator reward
 - **Insurance vault** — LP shares (pIV), bailout floor, optional auto-deleveraging (ADL)
 - **Copy trading** — follow a trader, positions mirror automatically, slashing on big losses
@@ -166,13 +162,13 @@ npm test
 本專案於 2026-08-06 做過一次全面稽核，結果與待辦清單在
 [`docs/audit/AUDIT_2026-08-06.md`](docs/audit/AUDIT_2026-08-06.md)。
 
-**在下列項目解決前，不建議對外做 live demo：**
+**pepelab-colosseum 部署的現況（2026-09-23）：**
 
-1. Deployer / owner 私鑰在 public repo 的 git 歷史中，且仍是四個合約的 owner
-   → [`docs/RUNBOOK_KEY_ROTATION.md`](docs/RUNBOOK_KEY_ROTATION.md)
-2. 線上 `FUNDING_INTERVAL` 是 300 秒而非 source 的 8h（見上方 Features 說明）
-3. `PepeAMM` 是零滑點預言機定價，不是恆定乘積 AMM
-4. `MockUSDC.mint` 無權限控管
+1. 本 repo 的合約由全新金鑰部署，owner 是 `0xB98BA27B…3a02`。稽核提到的舊 deployer 私鑰
+   （曾出現在 git 歷史中，2026-08-07 已輪替）**不擁有本 repo 任何合約**。
+   該段 git 歷史因完整匯入而仍存在於本 repo，請勿使用其中任何金鑰。
+2. `MockUSDC.mint` 無權限控管（測試網便利設計）
+3. `PepeAMM` 未在本 repo 部署
 
 ## Disclaimer
 
