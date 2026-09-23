@@ -25,18 +25,20 @@ Source of truth: `frontend/src/contracts/addresses.ts`. This is this repository'
 
 | Contract | Address |
 |---|---|
-| PerpetualExchange | `0xC45dEd77F4A30658e3c52E6fB4809E502e3D3B0E` |
-| AgentSessionManager | `0x71125e25c903AD4e198e1863d5Bf26df97926CDe` |
-| x402 FeeRouter (Circle USDC) | `0xEeDcEE7cD62A644EA4Cf053f213d5D75dB0B49c6` |
-| FeeRouter | `0x91E4aC532201Fc67C715Aa202B6Fe85F51b34994` |
-| InsuranceVault | `0x42b9503E4AEf7A347DB75E54d32230720D1dd4f0` |
-| MockOracle | `0x7c7FD43376738151a09719Ab5B33962a77dfBb49` |
-| MockUSDC (margin) | `0x0910e965B06845BD3871860d522952a44a574058` |
-| CopyTracker | `0xF19E53dDBbD6CfDFb50deF952CA5f956ed08d0C4` |
-| StrategyRegistry | `0x6Af6BEBC8fF0CE354e6E8A97921E1C5Ea95a7DE8` |
-| TraderStake | `0x790fd51ad485013C5b87FD7765679461675A31FD` |
-| KYCRegistry | `0x34D644b9d58c1D4B0Cb805BA49440F53Ca0378d0` |
-| MockSwapRouter | `0xCebdae595260F31541E44FBFfC80614d8B73C87a` |
+| PerpetualExchange | [`0xC45dEd77F4A30658e3c52E6fB4809E502e3D3B0E`](https://base-sepolia.blockscout.com/address/0xC45dEd77F4A30658e3c52E6fB4809E502e3D3B0E?tab=contract) |
+| AgentSessionManager | [`0x71125e25c903AD4e198e1863d5Bf26df97926CDe`](https://base-sepolia.blockscout.com/address/0x71125e25c903AD4e198e1863d5Bf26df97926CDe?tab=contract) |
+| x402 FeeRouter (Circle USDC) | [`0xEeDcEE7cD62A644EA4Cf053f213d5D75dB0B49c6`](https://base-sepolia.blockscout.com/address/0xEeDcEE7cD62A644EA4Cf053f213d5D75dB0B49c6?tab=contract) |
+| FeeRouter | [`0x91E4aC532201Fc67C715Aa202B6Fe85F51b34994`](https://base-sepolia.blockscout.com/address/0x91E4aC532201Fc67C715Aa202B6Fe85F51b34994?tab=contract) |
+| InsuranceVault | [`0x42b9503E4AEf7A347DB75E54d32230720D1dd4f0`](https://base-sepolia.blockscout.com/address/0x42b9503E4AEf7A347DB75E54d32230720D1dd4f0?tab=contract) |
+| MockOracle | [`0x7c7FD43376738151a09719Ab5B33962a77dfBb49`](https://base-sepolia.blockscout.com/address/0x7c7FD43376738151a09719Ab5B33962a77dfBb49?tab=contract) |
+| MockUSDC (margin) | [`0x0910e965B06845BD3871860d522952a44a574058`](https://base-sepolia.blockscout.com/address/0x0910e965B06845BD3871860d522952a44a574058?tab=contract) |
+| CopyTracker | [`0xF19E53dDBbD6CfDFb50deF952CA5f956ed08d0C4`](https://base-sepolia.blockscout.com/address/0xF19E53dDBbD6CfDFb50deF952CA5f956ed08d0C4?tab=contract) |
+| StrategyRegistry | [`0x6Af6BEBC8fF0CE354e6E8A97921E1C5Ea95a7DE8`](https://base-sepolia.blockscout.com/address/0x6Af6BEBC8fF0CE354e6E8A97921E1C5Ea95a7DE8?tab=contract) |
+| TraderStake | [`0x790fd51ad485013C5b87FD7765679461675A31FD`](https://base-sepolia.blockscout.com/address/0x790fd51ad485013C5b87FD7765679461675A31FD?tab=contract) |
+| KYCRegistry | [`0x34D644b9d58c1D4B0Cb805BA49440F53Ca0378d0`](https://base-sepolia.blockscout.com/address/0x34D644b9d58c1D4B0Cb805BA49440F53Ca0378d0?tab=contract) |
+| MockSwapRouter | [`0xCebdae595260F31541E44FBFfC80614d8B73C87a`](https://base-sepolia.blockscout.com/address/0xCebdae595260F31541E44FBFfC80614d8B73C87a?tab=contract) |
+
+Source code for all 16 contracts of this deployment (the table plus three oracle adapters and the x402 InsuranceVault) is verified on [Blockscout](https://base-sepolia.blockscout.com) and [Sourcify](https://sourcify.dev) as an exact match (creation and runtime bytecode), checked 2026-09-24. Click an address to read the code.
 
 The exchange authorizes exactly one agent contract: the AgentSessionManager above.
 
