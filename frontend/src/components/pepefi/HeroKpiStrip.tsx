@@ -4,9 +4,11 @@
 // exchange when a wallet is connected, otherwise shown as a quiet placeholder.
 
 import { useEffect, useRef, useState } from 'react'
+import { Link as RouterLink } from 'react-router'
 import { formatUnits } from 'ethers'
 
 import Box from '@mui/material/Box'
+import Link from '@mui/material/Link'
 import Grid from '@mui/material/Grid'
 import Stack from '@mui/material/Stack'
 import Typography from '@mui/material/Typography'
@@ -15,7 +17,7 @@ import { t } from 'src/locales'
 import { usePepefiWallet } from 'src/layouts/pepefi'
 import { useContracts } from 'src/hooks/useContracts'
 import { useFundingData } from 'src/hooks/useFundingData'
-import { SIGNAL_API_URL } from 'src/lib/pepefi/signalApi'
+import { SIGNAL_API_URL, SIGNAL_API_AVAILABLE } from 'src/lib/pepefi/signalApi'
 
 import { Mono, LiveDot, PEPE, hexA } from './brandKit'
 
@@ -99,6 +101,20 @@ function KpiTile({
   )
 }
 
+/**
+ * 拿不到 /revenue 時不顯示 $0 或 0——那會被讀成「沒有營收」。改成指向 Agent Mode，
+ * 那一頁的 x402 付款是直接從鏈上讀的。
+ */
+function OnChainLogHint() {
+  return (
+    <Link component={RouterLink} to="/agent-mode" underline="hover">
+      <Mono tone="muted" sx={{ fontSize: '1.1rem' }}>
+        {t.landing.heroKpi.onChainHint}
+      </Mono>
+    </Link>
+  )
+}
+
 export default function HeroKpiStrip() {
   const wallet = usePepefiWallet()
   const contracts = useContracts(wallet.provider, wallet.signer, wallet.chainId)
@@ -107,6 +123,8 @@ export default function HeroKpiStrip() {
   const [rev, setRev] = useState<RevenueTotals | null>(null)
 
   useEffect(() => {
+    // 沒有公開的 signal-api（例如 GitHub Pages 評審版）就不連，tile 改指向鏈上紀錄。
+    if (!SIGNAL_API_AVAILABLE) return undefined
     let alive = true
     const pull = async () => {
       try {
@@ -137,14 +155,18 @@ export default function HeroKpiStrip() {
     <Grid container spacing={1.5} sx={{ mb: 5 }}>
       <Grid size={{ xs: 6, md: 3 }}>
         <KpiTile label={t.landing.heroKpi.x402Revenue} live={!!rev}>
-          <Mono glow tone="green">
-            ${feeUsd.toFixed(3)}
-          </Mono>
+          {rev ? (
+            <Mono glow tone="green">
+              ${feeUsd.toFixed(3)}
+            </Mono>
+          ) : (
+            <OnChainLogHint />
+          )}
         </KpiTile>
       </Grid>
       <Grid size={{ xs: 6, md: 3 }}>
         <KpiTile label={t.landing.heroKpi.agentCallsPaid} live={!!rev}>
-          <Mono tone="gold">{Math.round(calls).toLocaleString()}</Mono>
+          {rev ? <Mono tone="gold">{Math.round(calls).toLocaleString()}</Mono> : <OnChainLogHint />}
         </KpiTile>
       </Grid>
       <Grid size={{ xs: 6, md: 3 }}>

@@ -10,6 +10,23 @@ export const SIGNAL_API_URL: string = (
   DEFAULT_SIGNAL_API_URL
 ).replace(/\/$/, '')
 
+/**
+ * 正式建置卻仍指向本機 = 這個部署沒有公開的 signal-api（例如 GitHub Pages 的評審版）。
+ * 這時前端不該去連：訪客的電腦上沒有這個服務，一定失敗；新版 Chrome 還會對公開網頁
+ * 存取 localhost 跳出區域網路權限提示。各頁改顯示「—」與說明，而不是 $0 或錯誤訊息。
+ */
+export function isPublicSignalApi(url: string, isDev: boolean): boolean {
+  if (isDev) return true
+  try {
+    const host = new URL(url).hostname
+    return host !== 'localhost' && host !== '127.0.0.1'
+  } catch {
+    return false
+  }
+}
+
+export const SIGNAL_API_AVAILABLE = isPublicSignalApi(SIGNAL_API_URL, import.meta.env.DEV)
+
 /** 訪客試買：呼叫伺服器端 demo 購買（伺服器代付 x402，回真實 settlement tx）。 */
 export async function demoBuySignal(trader?: string): Promise<{
   ok: boolean

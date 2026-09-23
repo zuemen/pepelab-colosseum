@@ -5,6 +5,15 @@ import type { Catalog } from '../zh-TW';
  */
 export const x402: Catalog['x402'] = {
   docs: {
+    /** 這個部署沒有公開的 signal-api 時（GitHub Pages 評審版）顯示的說明。 */
+    offline: {
+      baseUrlSuffix: ' — runs locally; not hosted in this public build',
+      split:
+        'Live totals come from the signal API, which is not hosted in this public build. Real x402 payments are read from Base Sepolia on the Agent Mode page.',
+      tryBuy:
+        'Live purchases are off in this public build because the signal API is not hosted here. To buy a signal yourself, run the API locally (demo/RUN.md); recorded purchases with their transactions are on Agent Mode.',
+      link: 'Open Agent Mode ↗',
+    },
     title: 'x402 Signal API',
     audienceChip: 'Developers / Agents',
     commerceChip: 'agent-native commerce',

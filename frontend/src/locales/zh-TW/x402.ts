@@ -6,6 +6,13 @@
  */
 export const x402 = {
   docs: {
+    /** 這個部署沒有公開的 signal-api 時（GitHub Pages 評審版）顯示的說明。 */
+    offline: {
+      baseUrlSuffix: '——只在本機執行，這個公開版本沒有部署',
+      split: '即時數字來自 signal API，而這個公開版本沒有部署它。真實的 x402 付款在 Agent Mode 頁，直接從 Base Sepolia 讀取。',
+      tryBuy: '這個公開版本沒有部署 signal API，所以不能在這裡即時購買。想自己買一次，請在本機啟動 API（見 demo/RUN.md）；錄好的購買紀錄與交易在 Agent Mode 頁。',
+      link: '前往 Agent Mode ↗',
+    },
     title: 'x402 訊號 API',
     audienceChip: '開發者 / Agent',
     commerceChip: 'Agent 原生商務',

@@ -94,6 +94,9 @@ interface ActivityRow { tx: string; block: number; session: number; text: string
 interface TryResult { kind: 'rejected' | 'accepted' | 'error'; text: string }
 
 const fmt18 = (v: bigint) => Number(ethers.formatUnits(v, 18))
+const SYMBOL_BY_ASSET_ID: Record<string, string> = Object.fromEntries(
+  Object.entries(ASSET_IDS).map(([sym, id]) => [id.toLowerCase(), sym]),
+)
 
 function statusOf(s: SessionRow, now: number): 'active' | 'revoked' | 'expired' {
   if (s.revoked) return 'revoked'
@@ -206,7 +209,9 @@ export default function AgentModePage() {
       } catch (e) {
         const outcome = classifySimulationFailure(e, iface)
         const template = outcome.kind === 'rejected' ? t.agentMode.tryIt.rejected : t.agentMode.tryIt.simulationFailed
-        setTryResult((r) => ({ ...r, [key]: { kind: outcome.kind, text: interpolate(template, { reason: outcome.reason }) } }))
+        // AssetNotAllowed 的參數是 bytes32 資產 ID，換成評審看得懂的代號。
+        const reason = outcome.reason.replace(/0x[0-9a-fA-F]{64}/g, (h) => SYMBOL_BY_ASSET_ID[h.toLowerCase()] ?? h)
+        setTryResult((r) => ({ ...r, [key]: { kind: outcome.kind, text: interpolate(template, { reason }) } }))
       }
     } catch (e) {
       setTryResult((r) => ({ ...r, [key]: { kind: 'error', text: (e as Error).message } }))
@@ -273,7 +278,7 @@ export default function AgentModePage() {
                 <Button variant="outlined" disabled={trying !== null}
                   onClick={() => void tryOrder('asset', ASSET_IDS.sAAPL, 10)}
                   sx={{ textTransform: 'none' }}>
-                  {t.agentMode.tryIt.button} · sAAPL · 10
+                  {t.agentMode.tryIt.buttonAsset} · sAAPL · 10
                 </Button>
               </Stack>
               <Stack spacing={1} sx={{ mt: 2 }}>

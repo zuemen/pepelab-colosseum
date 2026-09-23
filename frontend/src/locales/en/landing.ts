@@ -4,8 +4,8 @@ import type { Catalog } from '../zh-TW';
  * 見 `../zh-TW/landing.ts`。
  */
 export const landing: Catalog['landing'] = {
-  tagline: 'RWA · Tokenized Assets · Social Copy Trading 🐸',
-  brandLine: 'agent-native tokenized RWA · on Base',
+  tagline: 'Bounded AI agents · On-chain derivatives 🐸',
+  brandLine: 'agent mandates enforced on chain · on Base',
   enterDashboard: '🐸 Enter Dashboard',
   viewTraders: 'View Traders',
   agentModeCta: 'See the agent in action →',
@@ -53,7 +53,7 @@ export const landing: Catalog['landing'] = {
     four: '(Optional) Copy a trader on Marketplace, or register as one on the Trader page',
   },
 
-  oracleDisclosure: 'Oracle prices are controlled by the deployer (admin) and updated live during the demo to show PnL changes',
+  oracleDisclosure: 'Testnet prices are written by a single keeper key from CoinGecko and Yahoo Finance quotes; that key could write any value. This is a prototype, not a price feed to rely on.',
 
   /** 首頁最上方的即時 KPI 條（HeroKpiStrip）。網路名稱、chainId 是技術識別碼，不譯。 */
   heroKpi: {
@@ -62,14 +62,15 @@ export const landing: Catalog['landing'] = {
     openInterest: 'Open Interest',
     network: 'Network',
     connectHint: 'connect ↗',
+    onChainHint: 'on-chain log ↗',
   },
 
   /** #36：主視覺介紹與 Paper Trading 說明，各自拆成 `<b>` 前後的片段。 */
   markup: {
     heroBefore:
-      'One wallet, four asset classes: tokenized equities, bonds, gold, and crypto. On-chain mint and redeem, social copy trading, benchmark comparison, plus ',
+      'Give an AI agent a trading mandate — per-trade margin, total budget, max leverage, allowed assets, expiry — and a contract on Base checks every order against it. The agent buys its market data per call with ',
     heroBold: 'x402 paid signals',
-    heroAfter: ' — letting AI agents bring their own wallet, pay, and trade autonomously. Fully transparent on-chain.',
+    heroAfter: ' in USDC. The same app also offers tokenized equities, bonds, gold and crypto, all on Base Sepolia.',
 
     paperBefore: 'This platform uses ',
     paperBold1: 'testnet tokens',

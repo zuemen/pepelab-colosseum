@@ -53,8 +53,9 @@ export const agentMode: Catalog['agentMode'] = {
   tryIt: {
     title: 'Try it: make the agent break its cap',
     caption:
-      'Simulates, with eth_call, the agent of session #{session} placing an order with margin {margin} (cap {cap}). Nothing is sent and no key is needed — what comes back is the contract’s own rejection.',
+      'Simulates, with eth_call, the agent of session #{session} placing an order with margin {margin} (cap {cap}), or an order on an asset outside the session’s allow-list. Nothing is sent and no key is needed — what comes back is the contract’s own rejection.',
     button: 'Simulate over-cap order',
+    buttonAsset: 'Simulate off-list asset order',
     noSession: 'At least one session is needed to run this.',
     rejected: 'Rejected by the contract: {reason}',
     simulationFailed: 'Could not simulate this order (network or RPC error, not a contract rejection): {reason}',

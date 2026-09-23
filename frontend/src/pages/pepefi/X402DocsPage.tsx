@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { Link as RouterLink } from 'react-router'
 import Box from '@mui/material/Box'
 import Card from '@mui/material/Card'
 import Chip from '@mui/material/Chip'
@@ -12,7 +13,7 @@ import Container from '@mui/material/Container'
 import Typography from '@mui/material/Typography'
 
 import { t, interpolate } from 'src/locales'
-import { SIGNAL_API_URL, demoBuySignal } from 'src/lib/pepefi/signalApi'
+import { SIGNAL_API_URL, SIGNAL_API_AVAILABLE, demoBuySignal } from 'src/lib/pepefi/signalApi'
 import { Mono as Num, LiveDot, PEPE, MONO, hexA } from 'src/components/pepefi/brandKit'
 
 interface RevenueTotals {
@@ -107,6 +108,8 @@ export default function X402DocsPage() {
   const [rev, setRev] = useState<RevenueTotals | null>(null)
 
   useEffect(() => {
+    // 沒有公開的 signal-api 就不連（見 isPublicSignalApi）。
+    if (!SIGNAL_API_AVAILABLE) return undefined
     let off = false
     const pull = async () => {
       try {
@@ -154,7 +157,7 @@ export default function X402DocsPage() {
       <Card sx={{ p: 2.5 }}>
         <Stack spacing={1.2}>
           {[
-            [t.x402.docs.fact.baseUrl, SIGNAL_API_URL],
+            [t.x402.docs.fact.baseUrl, SIGNAL_API_AVAILABLE ? SIGNAL_API_URL : SIGNAL_API_URL + t.x402.docs.offline.baseUrlSuffix],
             [t.x402.docs.fact.network, 'base-sepolia (84532)'],
             [
               t.x402.docs.fact.asset,
@@ -213,7 +216,17 @@ export default function X402DocsPage() {
       </Box>
 
       {/* live 70/20/10 split */}
-      <SplitBar rev={rev} />
+      {SIGNAL_API_AVAILABLE ? (
+        <SplitBar rev={rev} />
+      ) : (
+        <Card sx={{ p: 2.5 }}>
+          <Typography variant="subtitle2" sx={{ fontWeight: 'bold', mb: 1 }}>{t.x402.docs.split.title}</Typography>
+          <Typography variant="body2" color="text.secondary">
+            {t.x402.docs.offline.split}{' '}
+            <Link component={RouterLink} to="/agent-mode">{t.x402.docs.offline.link}</Link>
+          </Typography>
+        </Card>
+      )}
 
       {/* try-buy */}
       <Card sx={{ p: 3, borderLeft: '3px solid', borderColor: 'success.main' }}>
@@ -221,7 +234,15 @@ export default function X402DocsPage() {
         <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
           {t.x402.docs.tryBuy.description}
         </Typography>
-        <Button variant="contained" color="success" disabled={busy} onClick={() => void tryBuy()}>
+        {!SIGNAL_API_AVAILABLE && (
+          <Alert severity="info" sx={{ mb: 2 }}>
+            {t.x402.docs.offline.tryBuy}{' '}
+            <Link component={RouterLink} to="/agent-mode" color="inherit" sx={{ textDecoration: 'underline' }}>
+              {t.x402.docs.offline.link}
+            </Link>
+          </Alert>
+        )}
+        <Button variant="contained" color="success" disabled={busy || !SIGNAL_API_AVAILABLE} onClick={() => void tryBuy()}>
           {busy ? t.x402.docs.tryBuy.busy : t.x402.docs.tryBuy.cta}
         </Button>
         {err && <Alert severity="error" sx={{ mt: 2 }}>{err}</Alert>}
@@ -247,9 +268,9 @@ export default function X402DocsPage() {
         <Typography variant="subtitle2" sx={{ fontWeight: 'bold', mb: 1 }}>{t.x402.docs.external.step1}</Typography>
         <Mono>{`curl -s ${SIGNAL_API_URL}/`}</Mono>
         <Typography variant="subtitle2" sx={{ fontWeight: 'bold', mt: 2, mb: 1 }}>{t.x402.docs.external.step2}</Typography>
-        <Mono>{`# agent/examples/buy-signal.ts — 只依賴 viem + x402-fetch
+        <Mono>{`# agent/examples/buy-signal.ts — needs only viem + x402-fetch
 export X402_API_URL=${SIGNAL_API_URL}
-export AGENT_PRIVATE_KEY=0x...   # 持 Circle USDC + 一點 ETH
+export AGENT_PRIVATE_KEY=0x...   # holds Circle USDC + a little ETH
 npx tsx examples/buy-signal.ts`}</Mono>
         <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 1 }}>
           {t.x402.docs.external.flow}

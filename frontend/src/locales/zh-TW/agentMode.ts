@@ -52,8 +52,9 @@ export const agentMode = {
   tryIt: {
     title: '現場測試：試著讓 agent 超額下單',
     caption:
-      '用 eth_call 模擬 agent 從 session #{session} 下一筆保證金 {margin} 的單（上限 {cap}）。不會送出交易，也不需要私鑰——回傳的就是合約本身的拒絕理由。',
+      '用 eth_call 模擬 agent 從 session #{session} 下一筆保證金 {margin} 的單（上限 {cap}），或下一筆不在白名單上的資產。不會送出交易，也不需要私鑰——回傳的就是合約本身的拒絕理由。',
     button: '模擬超額下單',
+    buttonAsset: '模擬白名單外資產下單',
     noSession: '需要至少一個 session 才能測試。',
     rejected: '合約拒絕：{reason}',
     simulationFailed: '無法模擬這筆訂單（網路或 RPC 錯誤，不是合約拒絕）：{reason}',

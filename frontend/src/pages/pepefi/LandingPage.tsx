@@ -5,6 +5,7 @@ import WalletButton from 'src/components/pepefi/WalletButton';
 import HeroKpiStrip from 'src/components/pepefi/HeroKpiStrip';
 import { SHOW_PERPETUALS } from 'src/lib/pepefi/featureFlags';
 import BenchmarkStrip from 'src/components/pepefi/dashboard/BenchmarkStrip';
+import { SIGNAL_API_AVAILABLE } from 'src/lib/pepefi/signalApi';
 import PaperTradingBadge from 'src/components/pepefi/PaperTradingBadge';
 import { MONO } from 'src/components/pepefi/brandKit';
 import { Iconify } from 'src/components/iconify';
@@ -312,17 +313,22 @@ export default function LandingPage() {
             一句話（「這裡配置的是股債金幣，不是只有幣」）正是它在講的。
             BenchmarkStrip 不吃任何持倉 props、自己打 signal-api，所以沒連錢包
             的訪客也照樣看到即時數字。 */}
-        <Box sx={{ mb: 6 }}>
-          <Typography variant="overline" component="h2" color="text.secondary" align="center" display="block" sx={{ mb: 3, fontWeight: 'bold', letterSpacing: 3, fontSize: '1rem' }}>
-            {t.portfolio.allocation.benchmark.heading}
-          </Typography>
-          <Card sx={{ p: { xs: 2.5, sm: 3.5 }, border: '1px solid', borderColor: 'divider' }}>
-            <BenchmarkStrip />
-          </Card>
-        </Box>
+        {/* 沒有公開的 signal-api（GitHub Pages 評審版）時整塊不顯示，而不是露出連線錯誤。 */}
+        {SIGNAL_API_AVAILABLE && (
+          <>
+            <Box sx={{ mb: 6 }}>
+              <Typography variant="overline" component="h2" color="text.secondary" align="center" display="block" sx={{ mb: 3, fontWeight: 'bold', letterSpacing: 3, fontSize: '1rem' }}>
+                {t.portfolio.allocation.benchmark.heading}
+              </Typography>
+              <Card sx={{ p: { xs: 2.5, sm: 3.5 }, border: '1px solid', borderColor: 'divider' }}>
+                <BenchmarkStrip />
+              </Card>
+            </Box>
 
-        {/* ── Divider ── */}
-        <Divider sx={{ my: 6, opacity: 0.15 }} />
+            {/* ── Divider ── */}
+            <Divider sx={{ my: 6, opacity: 0.15 }} />
+          </>
+        )}
 
         {/* ── Features ── */}
         <Box sx={{ mb: 6 }}>

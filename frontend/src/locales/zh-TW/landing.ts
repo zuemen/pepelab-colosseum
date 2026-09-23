@@ -50,7 +50,7 @@ export const landing = {
     four: '（可選）到 Marketplace 跟單，或在 Trader 頁登記成為交易者',
   },
 
-  oracleDisclosure: 'Oracle 價格由部署者（admin）控制，Demo 期間會即時更新以展示 PnL 變化',
+  oracleDisclosure: '測試網價格由單一 keeper 金鑰依 CoinGecko 與 Yahoo Finance 報價寫入；這把金鑰可以寫入任何值。這是原型，不是可依賴的價格來源。',
 
   /** 首頁最上方的即時 KPI 條（HeroKpiStrip）。網路名稱、chainId 是技術識別碼，不譯。 */
   heroKpi: {
@@ -59,6 +59,7 @@ export const landing = {
     openInterest: '未平倉量',
     network: '網路',
     connectHint: '連接錢包 ↗',
+    onChainHint: '鏈上紀錄 ↗',
   },
 
   /** #36：主視覺介紹與 Paper Trading 說明，各自拆成 `<b>` 前後的片段。 */
