@@ -43,6 +43,8 @@ jobs:
         env:
           VITE_LOCALE: en
           VITE_BASE_PATH: /pepelab-colosseum/
+          # Template paths built at runtime as `${CONFIG.assetsDir}/assets/...` (nav icons).
+          VITE_ASSETS_DIR: /pepelab-colosseum
         run: yarn build
 
       # GitHub Pages has no SPA rewrites: serve index.html for unknown paths so a

@@ -9,6 +9,8 @@ export const landing = {
   brandLine: 'agent 原生代幣化 RWA · on Base',
   enterDashboard: '🐸 進入 Dashboard',
   viewTraders: '查看交易者',
+  /** Colosseum 參賽版：評審的主要入口，免錢包。 */
+  agentModeCta: '看 AI agent 實際運作 →',
   connectHint: '連線後可直接瀏覽所有功能，無需註冊帳號',
 
   paperTrading: {

@@ -152,6 +152,16 @@ export default function LandingPage() {
               </Typography>
 
               <Stack direction="row" spacing={2} justifyContent={{ xs: 'center', md: 'flex-start' }} flexWrap="wrap">
+                {/* Colosseum build: the judge entry point, wallet-free. */}
+                <Button
+                  component={RouterLink}
+                  to="/agent-mode"
+                  variant="contained"
+                  size="large"
+                  sx={{ bgcolor: 'var(--palette-primary-main)', color: 'primary.contrastText', fontWeight: 900, '&:hover': { bgcolor: 'var(--palette-primary-dark)' } }}
+                >
+                  {t.landing.agentModeCta}
+                </Button>
                 <WalletButton wallet={wallet} />
                 {wallet.isConnected && (
                   <Button

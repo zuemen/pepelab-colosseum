@@ -8,6 +8,7 @@ export const landing: Catalog['landing'] = {
   brandLine: 'agent-native tokenized RWA · on Base',
   enterDashboard: '🐸 Enter Dashboard',
   viewTraders: 'View Traders',
+  agentModeCta: 'See the agent in action →',
   connectHint: 'Connect to browse every feature directly — no account required.',
 
   paperTrading: {
