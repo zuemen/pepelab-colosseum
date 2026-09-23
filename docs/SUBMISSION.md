@@ -6,6 +6,8 @@ Colosseum Crypto World's Fair · Base track · repo `zuemen/pepelab-colosseum` �
 
 **Live, no wallet needed:** https://zuemen.github.io/pepelab-colosseum/agent-mode
 
+**Development history:** PepeLab started on 2026-05-05 as our NCCU capstone project, before this contest. Section 12 discloses the prior work and lists what we built during the contest (Sep 14 – Oct 12, 2026).
+
 ---
 
 ## 1. Problem
@@ -188,10 +190,50 @@ Sources: see §1 (read 2026-09-23). A dash means the source documents no such co
 
 Security history: [`docs/audit/AUDIT_2026-08-06.md`](audit/AUDIT_2026-08-06.md). This deployment uses fresh keys; a historical key visible in git history owns nothing here.
 
-## 12. Team
+## 12. Development history and disclosure
+
+**This product was not started at the hackathon.** PepeLab began on 2026-05-05 as our NCCU Capstone 2026 project. The repository keeps its full git history: 624 commits before the contest opened (Sep 14, 2026, 06:00 PT) and 46 during it so far (as of Sep 24, 2026: 181 files changed, +9,616 / −6,455 lines). Colosseum judges only the work done during the contest, so this section separates the two. Every hash below is in this repository.
+
+### Prior work (before Sep 14, 2026)
+
+| Component | First commit |
+|---|---|
+| `PerpetualExchange` (on-chain CFD/perpetuals engine), MockUSDC, oracle adapters | `307765e`, 2026-05-06 |
+| `FeeRouter` (fee routing; later the 70/20/10 x402 revenue split) | `907a6b6`, 2026-05-09 |
+| `AgentSessionManager` (per-trade cap, budget, max leverage, assets, expiry, revocation) | `f7a1308`, 2026-06-13 |
+| Agent stack: x402 signal API, MCP server, demo agent, shared SDK | `5585f28`, 2026-06-13 |
+| EIP-712 agent-authorization credential (issue and verify) | `18ab803`, `a9c695d`, 2026-06-19 |
+| Telegram bot | `9eb6697`, 2026-06-21 |
+| Security review and fixes | [`docs/audit/AUDIT_2026-08-06.md`](audit/AUDIT_2026-08-06.md) |
+
+The wider capstone app (marketplace, vaults, staking, ESG and carbon features) also predates the contest. It is not what this submission pitches.
+
+### Built during the contest (Sep 14 – Oct 12, 2026)
+
+| Work | Commits |
+|---|---|
+| **Isolated deployment for judges.** A fresh, complete contract stack on Base Sepolia with new keys, including our own x402 FeeRouter bound to Circle USDC. Repo references, ops scripts and the price keeper now point only at it. | `5bb8be3`, `a5305e0`, `4b7533a`, `da66374`, `c9e2f64`, `090407a` |
+| **Replayable three-party demo.** User, agent and signal seller on separate keys; two orders mined and reverted by the contract (over the cap, after revocation). Fixed an SDK bug where `open_position` returned no position id. | `be98b00` |
+| **Agent Mode page.** A wallet-free judge view of agent payments, session caps and rejections, with "Try it" simulations against the live contract. | `ed3f531`, `e552317` |
+| **Open, English, public packaging.** English README and submission, MIT license, English MCP and signal-API discovery text, English frontend on GitHub Pages. | `7d7523c`, `d888ab9`, `bb6f840`, `29dd595`, `109f3a6`, `7556c3b` |
+| **x402 signal API hardening.** Record revenue only after the facilitator confirms settlement, then settle in batches from a queue (this also fixed routing revenue for payments that never settled); facilitator latency probe; explicit payment timeouts; facilitator error handling; written threat model for credentials passed as tool arguments. | `c738cb3`, `de46da8` |
+| **Reliability fixes found while preparing the demo.** Event scans under the 1,000-block `eth_getLogs` cap of sepolia.base.org; keeper nonce reuse on a lagging load-balanced RPC. | `6da5d42`, `9e5340c` |
+| **Retail app work (not the focus of this submission).** Adopt a published allocation as spot tokens, swap-only exchange page, portfolio and token page polish, reputation staking, ESG carbon-tier display. | `ac3e2a0`, `b4b2c22`, `fa7dbe0`, `7c830b9`, `155b3dd`, `8219a0b`, `043f9ca` |
+
+### How we prioritized
+
+The first week of the contest went to the retail app, before we committed to this submission. The capstone already had the contracts; what it lacked was evidence a stranger could check without trusting us. Once we chose the Base track, we put that first: an isolated deployment, a demo whose rejected orders are real reverted transactions, and a page that shows them without a wallet. Packaging and reliability fixes came next, because a judge who hits a 404 or an empty page never reaches the idea.
+
+## 13. Team
 
 <!-- TODO(user): names, roles, one line each on background. University: NCCU (University Award). -->
 
 ## AI usage
 
-Parts of this project were built with AI coding assistants (Claude). All code is reviewed by the team.
+We build with an AI coding assistant (Claude Code). Commits it co-wrote carry a `Co-Authored-By: Claude` trailer: 35 of the 46 contest-period commits do.
+
+| The assistant | The team |
+|---|---|
+| Wrote and refactored contracts, agent code, frontend pages and tests | Chose the product, the Base track and the positioning |
+| Ran test suites, deployments and on-chain reads we asked for | Decided which features to build and in what order |
+| Drafted documentation, including this write-up | Set the rules the work follows (for example, no writes to the capstone's contracts) and decided what shipped |

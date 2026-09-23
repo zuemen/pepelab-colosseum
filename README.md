@@ -2,7 +2,7 @@
 
 A user gives an AI agent a trading mandate — per-trade margin, total budget, max leverage, allowed assets, expiry. A contract on **Base** enforces that mandate on every order, and the agent pays for its market data per call over **x402**.
 
-Built for the Colosseum Crypto World's Fair (Base track). **Submission write-up: [`docs/SUBMISSION.md`](docs/SUBMISSION.md)** · deployment log and decisions: [`HACKATHON.md`](HACKATHON.md) · latest demo run: [`demo/RUN.md`](demo/RUN.md).
+Entered in the Colosseum Crypto World's Fair (Base track). PepeLab started before the contest as our NCCU capstone; [the submission discloses the prior work](docs/SUBMISSION.md#12-development-history-and-disclosure) and lists what we built during the contest. **Submission write-up: [`docs/SUBMISSION.md`](docs/SUBMISSION.md)** · deployment log and decisions: [`HACKATHON.md`](HACKATHON.md) · latest demo run: [`demo/RUN.md`](demo/RUN.md).
 
 ## See it in 3 minutes
 
