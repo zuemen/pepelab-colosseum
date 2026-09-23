@@ -41,11 +41,11 @@ const RPC =
 const CHAIN_ID = 84532; // Base Sepolia
 
 // Session Key configuration (Phase 2 — autonomous trading)
-// 2026-07-27 重新部署的實例，帶 per-session 資產白名單。舊的 0x5Ebcc64C… 沒有，
-// 所以不再當預設值 —— 預設值就是大多數人實際會跑到的設定。
+// pepelab-colosseum 自己的 AgentSessionManager（2026-09-23 部署，帶 per-session 資產白名單）。
+// 刻意不引用原專案 pepelab_onchain_cfd 的任何 manager。
 const SESSION_MANAGER =
   process.env.SESSION_MANAGER_ADDRESS?.trim() ||
-  "0x4E7cC1B79B72ab72531a6C790e14304370f70764";
+  "0x71125e25c903AD4e198e1863d5Bf26df97926CDe";
 const SESSION_ID = process.env.DEMO_SESSION_ID?.trim();
 const DEMO_MARGIN = Number(process.env.DEMO_MARGIN ?? "10");
 const DEMO_ASSET = process.env.DEMO_ASSET ?? "sBTC";

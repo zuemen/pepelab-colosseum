@@ -1,8 +1,9 @@
 // 公開 x402 Signal API 的基底網址。正式環境設 VITE_SIGNAL_API_URL 覆寫；
-// 未設時預設指向已上線的 Vercel 部署，本機開發可改設為 http://localhost:4021。
+// 未設時預設指向本機 signal-api（`npm run signal-api`）。刻意**不**預設到原專案
+// pepelab_onchain_cfd 的 Vercel 部署：本 repo 不得付費或寫入原專案的服務。
 // 前端各頁（文件頁 / 監控 / 試買）共用。
 export const DEFAULT_SIGNAL_API_URL =
-  'https://agent-git-master-zuemens-projects.vercel.app'
+  'http://localhost:4021'
 
 export const SIGNAL_API_URL: string = (
   (import.meta.env.VITE_SIGNAL_API_URL as string | undefined) ??

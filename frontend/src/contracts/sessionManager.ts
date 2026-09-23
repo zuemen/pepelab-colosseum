@@ -15,11 +15,11 @@ const ZERO = '0x0000000000000000000000000000000000000000'
 const SESSION_MANAGER_ADDRESS: Record<number, string> = {
   31337:    ZERO, // Anvil：跑 deploy-anvil.sh 後填入
   11155111: ZERO, // Sepolia：跑 deploy-sepolia.sh 後填入
-  // Base Sepolia. Redeployed 2026-07-27 to bring the per-session asset
-  // allow-list on chain; session ids restart from 0 on this instance.
-  // Previous instance 0x5Ebcc64C712C5a26119789dCbD0753981dc518E8 is still
-  // deployed and its 13 sessions remain readable, but it has no asset gate.
-  84532:    '0x4E7cC1B79B72ab72531a6C790e14304370f70764',
+  // Base Sepolia — pepelab-colosseum's own AgentSessionManager (Deploy.s.sol,
+  // 2026-09-23), bound to this repo's exchange 0xC45dEd77…3B0E and the only
+  // agent that exchange authorizes. The original project's managers are
+  // intentionally not referenced.
+  84532:    '0x71125e25c903AD4e198e1863d5Bf26df97926CDe',
 }
 
 export function getSessionManagerAddress(chainId: number | null): string {

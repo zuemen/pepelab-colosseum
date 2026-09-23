@@ -46,61 +46,47 @@ const ANVIL: ChainAddresses = {
   AssetVault:             "0x0000000000000000000000000000000000000000",
 }
 
-// ── Sepolia testnet (chainId 11155111) ────────────────────────────────────────
-const SEPOLIA: ChainAddresses = {
-  MockUSDC:           "0x167Bacef1925184f0df34A3196F834C0622Cfd36",
-  MockUSDT:           "0xA08C0F92804173Bf796FDa3FA66654F96aDDB5F1",
-  MockOracle:         "0x17CA20A37Cf04F2f589B2573EC95f1411D29d958",
-  TraderStake:        "0x3fe1dbC82eA267085CAB5eb67C6b7d3E68A7d673",
-  InsuranceVault:     "0x8bDE83dBC2CA450B539346e224E7819348C7b091",
-  FeeRouter:          "0x2297e580166aF35dd0065379286f782933653079",
-  PerpetualExchange:  "0x0c6459d38617E60017bDc4ed69ec26137DA5c32b",
-  StrategyRegistry:   "0x999962a2F031623cF4996841004BAE8fd0589FeB",
-  CopyTracker:        "0xA261E76c7C465f910082b372580a57Dea4DD210d",
-  MockSwapRouter:     "0x115CED81eD9Ef6a1c5faa428cEaf076E284b4871",
-  ESGRegistry:        "0xdCFdDd38e1d80C1A5eeB44c05187Ec7979B98c13",
-  KYCRegistry:        "0x7d40A2D3e39cDD1Dc613071D3C463AA161f7C5bB",
-  PepeAMM:            "0x3e6503BA0F4ad9E4743b695141CeB48709106A0c",
-  PepeToken:              "0xa364F43627A17BE5bfbcb32693f3eD7E44ebe1D9",
-  PepeClaim:              "0x852c0fBa54552aafbA4798709d90056159682A4C",
-  EsgRewardDistributor:   "0xA1a522B9d31e5B48E41DcCd050DE10dA2e3BEdD0",
-  PepeIncentives:         "0x65b9F1B4d18822d4faBa763621E3e4eA065aE5D7",
-  PepeStaking:            "0xf5d0953A443259ebdFC62fE49189998988e309f9",
-  AssetVault:             "0xB4D10cBC6143E410dd7b48797334C4397b99325f",
-}
+// ── Sepolia testnet (chainId 11155111) — not supported in this repo ──────────
+// Every Sepolia contract belongs to the original pepelab_onchain_cfd
+// deployment. pepelab-colosseum must never send a transaction to it, so the
+// chain is left out of CHAIN_MAP and the UI treats it as an unsupported network.
 
 // ── Base Sepolia testnet (chainId 84532) ──────────────────────────────────────
-// Phase 4 live deployment (Deploy.s.sol broadcast 2026-06-14). Contracts not in
-// Deploy.s.sol (ESG/Pepe* AMM/staking) stay 0x0 → UI "not deployed" guards.
+// pepelab-colosseum's OWN deployment (Deploy.s.sol broadcast 2026-09-23 by
+// 0xB98BA27B…3a02; broadcast/Deploy.s.sol/84532/run-latest.json). It shares
+// nothing with the original pepelab_onchain_cfd deployment: every contract is
+// new and no transaction was ever sent to an original-project address.
+// Contracts not in Deploy.s.sol stay 0x0 → UI "not deployed" guards — they are
+// deliberately NOT pointed at the original project's instances.
 const BASE_SEPOLIA: ChainAddresses = {
-  MockUSDC:          "0x69fd695Bc7C3aFdb35ABA35cD6890C506400b035",
-  MockUSDT:          "0x5c8A1e970D275Cc269e09A949D68693120416d78",
-  MockOracle:        "0xeD90c4F3B48213888870C1FC8486921Cb0990Aa3",
-  TraderStake:       "0x01aEB530bcFc69f036309ffe55acc7eA6C5a28Fe",
-  InsuranceVault:    "0xB364E2e3e1e7a2b033eF03a4ACceF42066F3D812",
-  FeeRouter:         "0x00f6cf0113399a7A451c7f85fe094a28092d3e0c",
-  PerpetualExchange: "0x827eA0c62a32e995927101259042F8A27D99124D",
-  StrategyRegistry:  "0xA103de184A5C76d7b70fB4e908F252199e004b95",
-  CopyTracker:       "0xC9e91f7D36e910C58042164032c625427b23CCB2",
-  MockSwapRouter:    "0xC9b0e5C219AA1B3eB00E92Fd9a883B182F0AE8Ae",
-  ESGRegistry:       "0xBF5B9cD78566791d79c687A732b4ed5bc3E95dFf",
-  KYCRegistry:       "0x5D95fD9e7a5f80E5369e24783F1f98E0f952360d",
-  PepeAMM:           "0x93be44a81a2796d378f65ebcc8d5f8b40166ad63",
-  PepeToken:              "0xccd05cbdc2f7961a4c27d3633694022722786a0f",
-  PepeClaim:              "0x459d238aC61eC4A0E08608FBcd363227B860CF34",
-  EsgRewardDistributor:   "0x44a8E5195E168e5AdcCa4343Bd8B399B49D5609F",
-  PepeIncentives:         "0xEBfA1dc7dDea032ac6242cB619d982e543A23c12",
-  PepeStaking:            "0xC78D68cA1B217ba241c23Ebad3118c6ec0dc0D34",
-  AssetVault:             "0xC30DFe1C9EBb47197b785995aA9Cd0F5B89557A5",
+  MockUSDC:          "0x0910e965B06845BD3871860d522952a44a574058",
+  MockUSDT:          "0x0000000000000000000000000000000000000000",
+  MockOracle:        "0x7c7FD43376738151a09719Ab5B33962a77dfBb49",
+  TraderStake:       "0x790fd51ad485013C5b87FD7765679461675A31FD",
+  InsuranceVault:    "0x42b9503E4AEf7A347DB75E54d32230720D1dd4f0",
+  FeeRouter:         "0x91E4aC532201Fc67C715Aa202B6Fe85F51b34994",
+  PerpetualExchange: "0xC45dEd77F4A30658e3c52E6fB4809E502e3D3B0E",
+  StrategyRegistry:  "0x6Af6BEBC8fF0CE354e6E8A97921E1C5Ea95a7DE8",
+  CopyTracker:       "0xF19E53dDBbD6CfDFb50deF952CA5f956ed08d0C4",
+  MockSwapRouter:    "0xCebdae595260F31541E44FBFfC80614d8B73C87a",
+  ESGRegistry:       "0x0000000000000000000000000000000000000000",
+  KYCRegistry:       "0x34D644b9d58c1D4B0Cb805BA49440F53Ca0378d0",
+  PepeAMM:           "0x0000000000000000000000000000000000000000",
+  PepeToken:              "0x0000000000000000000000000000000000000000",
+  PepeClaim:              "0x0000000000000000000000000000000000000000",
+  EsgRewardDistributor:   "0x0000000000000000000000000000000000000000",
+  PepeIncentives:         "0x0000000000000000000000000000000000000000",
+  PepeStaking:            "0x0000000000000000000000000000000000000000",
+  AssetVault:             "0x0000000000000000000000000000000000000000",
 }
 
 // Phase 4 production-oracle showcase on Base Sepolia (deployed, NOT wired into
 // the live exchange — which runs on MockOracle so synthetic-asset demos work).
 // AggregatorOracle fronts Chainlink + Pyth (Pyth live on Base Sepolia).
 export const BASE_SEPOLIA_ORACLE_SHOWCASE = {
-  ChainlinkAdapter: "0x37DC7b70899BFfB17949366a5b6a86203C428E2f",
-  PythAdapter:      "0x551C0B2e75a9129fe697210223F1Ca6e64F3C6d5",
-  AggregatorOracle: "0x8215158642350a3f329aB9597186d21f957A813D",
+  ChainlinkAdapter: "0xb51Ab689348d5Ce69f6FB9dF45efe359e162964A",
+  PythAdapter:      "0x2879d41C45135F87Ed92373F43b20446b07571Fd",
+  AggregatorOracle: "0xE5903f1560Ed71Fd3A5a61a077DD9a8B0A963444",
 } as const
 
 // Exported (not just used internally) so callers that need "every chain's
@@ -109,7 +95,6 @@ export const BASE_SEPOLIA_ORACLE_SHOWCASE = {
 // re-hardcoding a chain's addresses a second time.
 export const CHAIN_MAP: Record<number, ChainAddresses> = {
   31337:    ANVIL,
-  11155111: SEPOLIA,
   84532:    BASE_SEPOLIA,
 }
 
@@ -186,38 +171,9 @@ export type AssetSymbol  = keyof typeof ASSET_IDS
 // a "not enabled yet" notice instead of failing.
 export const SYNTH_TOKENS: Record<number, Partial<Record<AssetSymbol, string>>> = {
   31337:    {},
-  // DeploySyntheticAssets.s.sol broadcast on Sepolia (2026-07-26) — recovered
-  // from broadcast/DeploySyntheticAssets.s.sol/11155111/run-latest.json.
-  // All 11 verified registered on AssetVault.
-  11155111: {
-    sBTC:   "0x70B91d94e80C71FFfad3Ab39cd187aa67F70bfd7",
-    sETH:   "0xc2eAB19e995458ce06dD7a188bABbeEC6F96478A",
-    sAAPL:  "0xf45f00D4D74D0B4352993424d5EA7d6D28AFbEE5",
-    sTSLA:  "0x9B9c176184C1d7B83206Dd5eb06F6563e8BA1100",
-    sGOLD:  "0x468a65aCB9e83955459e6FeA41783ecF0D90c067",
-    sBOND:  "0x5Bb30b2C730c6C9FE03911D696d895c0A3e3B123",
-    sNVDA:  "0x349757C3C171DbAF1cB885f03b8EFc2c93C9a3a9",
-    sMSFT:  "0xc120bbCc68db30F8fc87d4ce983AabD89555F0cB",
-    sGOOGL: "0xC7F23AAa4aCf63C0990C0B0Fc2BCcF0A3Df2532d",
-    sICLN:  "0x0971690615EcAAa39eA517B85B9Cf7ABd247Fe59",
-    sESGU:  "0xC236D6298b280def6D70931c8E67953E9De0Eb41",
-  },
-  // Deployed 2026-08-07 to close the gap that made Base — the chain the UI calls
-  // canonical — the one where tokenised assets did not work. All 11 verified
-  // registered on AssetVault 0xC30DFe1C…57A5.
-  84532: {
-    sBTC:   "0x217B1B450eC77a8AECC569108683106c169b9dDC",
-    sETH:   "0x56182e30733641616e5D28441E17d00A4cE2b54F",
-    sAAPL:  "0xBF50bc2104C1C47EEe1E0b1693AeB27D6Bb1D70B",
-    sTSLA:  "0xeB869a8f10C251C5eb6626C31aA5D54B94c28044",
-    sGOLD:  "0xb6cDca0a481779cB04DeCf2A25f32bB0326d29fB",
-    sBOND:  "0x019F8b30D5988A3Df828C64c527a5965f6699286",
-    sNVDA:  "0x3dd1447e21C779bddf079baB86E330db0317fDAf",
-    sMSFT:  "0x50b3405e7165d052f0ca5971627004b61249259F",
-    sGOOGL: "0x161ea684812b91c5685237B2DBEc20b861177575",
-    sICLN:  "0x13d13c8BCF513368B48B13e9f9EEB78Be991f315",
-    sESGU:  "0x0b3FC9e94cA04E3457B71064339c599D44dd5B20",
-  },
+  // pepelab-colosseum has not deployed the tokenized layer on Base Sepolia;
+  // the original project's SyntheticAssets are intentionally not listed here.
+  84532: {},
 }
 
 export const getSynthTokens = (
@@ -246,49 +202,9 @@ export const V2_STACK: Record<number, {
   SustainabilityBadge?: string
   tokens: Partial<Record<AssetSymbol, string>>
 }> = {
-  // ── Sepolia (11155111) — deployed 2026-07-27, comparison showcase ──────────
-  11155111: {
-    GuardedOracle: "0x32A19D04ef2ca5A7DA02Df39419729fA745749A1",
-    AssetVaultV2:  "0x3a37415981F6f4fC27FA6c8C62F1d4e47115fD17",
-    tokens: {
-      sBTC:   "0xeCF271592C0D64663906318f250d49c255E332Ac",
-      sETH:   "0x576856E68FdE8D586EAa2E2c21e74c4D37587e8F",
-      sAAPL:  "0x84C27703db71062061364E5B8E015139b2ac0163",
-      sTSLA:  "0x0e8b6478038876741925A5B7A571596E6f4a695E",
-      sGOLD:  "0xc97b8195cBd00fec5D3aAb103C9E313414B11a10",
-      sBOND:  "0xb84C17a704F9e7d96c3aF84Df05C6a8da5c344eb",
-      sNVDA:  "0xB5586Ef5bBA7DAa698a4a6745C9D46F0b3bECfeE",
-      sMSFT:  "0xCB2c5c834f1f0d54E6Da1f3628B1c624aAa750cf",
-      sGOOGL: "0x42D083F0e4a60FdFe28b5E00D44f11C41Bf1763d",
-      sICLN:  "0xF34cA755a315531745dDC4A85963EeFA6129F459",
-      sESGU:  "0x3f89C2Fd5e7222012d563ecC67e41De02ad746e7",
-    },
-  },
-  // ── Base Sepolia (84532) — the canonical chain, hardened by #129 ───────────
-  // Base Sepolia never had a hardened vault: its mint/redeem path is still the
-  // V1 AssetVault (no fee, no reserve ratio, no pause). #129 deploys this stack
-  // alongside V1, exactly as Sepolia's was. Addresses below are filled by
-  // docs/DEPLOY_129_CUTOVER.md as each phase lands; while any is 0x0 the
-  // frontend's "not deployed" guard keeps rendering the legacy path.
-  84532: {
-    GuardedOracle:       "0x8E9e59BE9589Ad88EC14F3ef6bdcc43E8B76f842",
-    AssetVaultV2:        "0x916D7Fc399d9afd23BAa113E2c2Cc601341ff10a",
-    ESGRegistryV2:       "0xBF5B9cD78566791d79c687A732b4ed5bc3E95dFf",
-    SustainabilityBadge: "0x0a4aE14a413a03c20ccF43E8134BfbD7bCB89820",
-    tokens: {
-      sBTC:   "0x0aF44425ADC54fdBcB084611Ca82beFb91DDb1b6",
-      sETH:   "0xc81Bc66656E7d32A570895B7ba8a3Fc9aa9997f1",
-      sAAPL:  "0x4f36CBc3321b47327407C0eD116188A21ec4da28",
-      sTSLA:  "0xD816E621849eb8849D032dc39dD37e39cd668144",
-      sGOLD:  "0xd74aE712B412488Bb18F604052B232fea22270DA",
-      sBOND:  "0x14496785f82F691656691486C49c3b8fB78BF770",
-      sNVDA:  "0x881a8B8b4eacf7103078d6d5e81bfB4E344f3003",
-      sMSFT:  "0x893a8F9Fd92110EBcAbB8855223CF184B54a7166",
-      sGOOGL: "0xaD7348198fdbb89eEeAC4E607E917DE8A91CD834",
-      sICLN:  "0xcb3069C32188Fd92376d1ba53F08D733451e9175",
-      sESGU:  "0x510D59b33C04164596D2601B57a154dF31914C23",
-    },
-  },
+  // Base Sepolia (84532): pepelab-colosseum has no hardened stack deployed.
+  // The original project's V2 contracts are intentionally not listed here, so
+  // hasV2Stack(84532) is false and the UI renders its "not deployed" path.
 }
 
 export const getV2Stack = (chainId: number | null) =>

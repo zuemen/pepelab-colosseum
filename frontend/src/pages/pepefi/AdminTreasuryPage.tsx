@@ -47,7 +47,7 @@ const fEth = (v: bigint) => parseFloat(formatEther(v)).toFixed(6)
  * 一改，這頁就對真正的 owner 說「Not authorized」，同時對舊位址開門。
  * 這一頁本來就已經把 platformTreasury 抓回來了，只是沒拿來用。
  */
-const FALLBACK_TREASURY_HINT = '0xE80A81360608C1342e66743F70a00f75d792Eb93'
+const FALLBACK_TREASURY_HINT = '0xB98BA27B606ae062CCC80071E5b9F81238DB3a02' // this repo's deployer = FeeRouter platformTreasury
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 interface RevenueStats {

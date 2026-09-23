@@ -30,7 +30,7 @@ function banner(t: string) {
 const RPC = process.env.BASE_SEPOLIA_RPC_URL?.trim() || "https://sepolia.base.org";
 const API =
   process.env.SIGNAL_API_PUBLIC_URL?.trim() ||
-  "https://agent-git-master-zuemens-projects.vercel.app";
+  "http://localhost:4021";
 
 async function main() {
   const provider = new ethers.JsonRpcProvider(RPC, {
