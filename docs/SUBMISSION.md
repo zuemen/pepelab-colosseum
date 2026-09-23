@@ -159,6 +159,22 @@ x402 turns data into something an agent can buy without accounts or API keys. Th
 - Perp volume on Base was $3.1B over 30 days (DefiLlama via The Crypto Times, 2026-09-17; a different window from the CoinLaw figure). That is a small base with room to grow for agent-driven flow.
 - x402 is an open standard governed by the x402 Foundation under the Linux Foundation since 2026-07-14 ([LF](https://www.linuxfoundation.org/press/linux-foundation-announces-operational-launch-of-x402-foundation-to-standardize-internet-native-payments-for-ai-agents-and-applications)). Artemis estimates that most of its current traffic is protocol signaling rather than commerce ([Forkast, 2026-08-04](https://finance.yahoo.com/markets/crypto/articles/x402-foundation-activated-27-old-152440828.html)). Paid machine-to-machine data is early; that is the opportunity, not a claim of traction.
 
+### Go-to-market and distribution
+
+Colosseum asks for go-to-market, demand validation and distribution. Facts and hypotheses are marked separately.
+
+**First customers (hypothesis).** Teams that already ship trading agents and need their users to fund them safely, and trading venues on Base that want agent flow without handing out all-or-nothing keys. Both would buy bounded autonomy as infrastructure, which is why licensing the mandate layer (B2B) is our main bet.
+
+**How they find us.**
+
+1. **Open source first (fact).** The session contract, the agent SDK and the MCP server are MIT-licensed, with verified source on Base Sepolia. Any agent can use them on testnet today.
+2. **Agent-native discovery.** The MCP server works with MCP-capable agent frameworks today. Listing the data API on x402 Bazaar needs a publicly hosted signal API first (planned).
+3. **Direct outreach.** Agent builders, trading teams on Base, and data sellers, through the Base and agent-builder communities.
+
+**What we charge (hypotheses, not yet validated).** Data and signals: per call over x402 at a price the provider sets; the 20% platform and 10% vault shares are already routed on chain. Mandate layer: a license per venue or per active session.
+
+**Demand validation.** Until October 12 we interview agent builders, trading teams on Base and data sellers with a fixed script (their past behaviour first, our product last) and record every conversation. Validation so far: none recorded yet (as of 2026-09-24). We will update this line with real numbers only.
+
 ## 9. Competitive landscape
 
 | | Per-trade size cap | Leverage cap | Asset allow-list | Revocable | Agent pays for data | Enforced where |
