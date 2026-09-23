@@ -32,11 +32,11 @@ import Tooltip from '@mui/material/Tooltip';
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 // Base Sepolia blocks every ~2s, and its public RPC (sepolia.base.org) rejects
-// eth_getLogs ranges over 2000 blocks ("query exceeds max block range 2000").
+// eth_getLogs ranges over 1,000 blocks (measured 2026-09-23; it was 2,000 earlier).
 // FETCH_BLOCKS is the total lookback; CHUNK_SIZE keeps every single request
 // under that cap — queryFilterChunked() below splits the range accordingly.
 const FETCH_BLOCKS = 9000   // ~5 h on Base Sepolia (2 s/block)
-const CHUNK_SIZE    = 1800
+const CHUNK_SIZE    = 900
 
 // Events are cached client-side so history survives past the scan window — the
 // chain keeps everything forever, but a fixed lookback can only ever see the

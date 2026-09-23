@@ -226,3 +226,49 @@ describe('describeScanWindow', () => {
     expect(describeScanWindow(84532, 2_700)).toBe('1.5h')
   })
 })
+
+// ── Large-range log fallback (sepolia.base.org caps eth_getLogs at 1,000 blocks) ──
+const fallbackGetLogs = vi.hoisted(() => vi.fn())
+vi.mock('ethers', async (orig) => {
+  const actual = await orig<typeof import('ethers')>()
+  class FakeJsonRpcProvider {
+    getLogs = fallbackGetLogs
+  }
+  return { ...actual, JsonRpcProvider: FakeJsonRpcProvider }
+})
+
+describe('log fallback', () => {
+  const failing = (chainId: number) => ({
+    getNetwork: async () => ({ chainId: BigInt(chainId) }),
+    getLogs: vi.fn(async () => { throw new Error('eth_getLogs is limited to a 1,000 range') }),
+  })
+
+  it('Base Sepolia: a failed chunk is re-queried on the fallback RPC', async () => {
+    fallbackGetLogs.mockReset().mockResolvedValue([{ id: 'from-fallback' }])
+    const p = failing(84532)
+    const logs = await getLogsChunked(p, { address: '0xabc' }, 0, 10)
+    expect(logs).toEqual([{ id: 'from-fallback' }])
+    expect(fallbackGetLogs).toHaveBeenCalledWith({ address: '0xabc', fromBlock: 0, toBlock: 10 })
+  })
+
+  it('unlisted chain (local Anvil): no fallback, the chunk is dropped as before', async () => {
+    fallbackGetLogs.mockReset().mockResolvedValue([{ id: 'wrong-chain' }])
+    const logs = await getLogsChunked(failing(31337), { address: '0xabc' }, 0, 10)
+    expect(logs).toEqual([])
+    expect(fallbackGetLogs).not.toHaveBeenCalled()
+  })
+
+  it('queryLogsChunked re-binds the contract to the fallback provider', async () => {
+    const provider = failing(84532)
+    const rebound = { queryFilter: vi.fn(async () => [{ id: 'rebound' }]) }
+    const contract = {
+      runner: { provider },
+      queryFilter: vi.fn(async () => { throw new Error('limited to a 1,000 range') }),
+      connect: vi.fn(() => rebound),
+    }
+    const onFailed = vi.fn()
+    const logs = await queryLogsChunked(contract, 'filter', 0, 10, undefined, onFailed)
+    expect(logs).toEqual([{ id: 'rebound' }])
+    expect(onFailed).not.toHaveBeenCalled()
+  })
+})

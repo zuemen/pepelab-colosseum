@@ -1,4 +1,6 @@
 // 事件掃描（getLogs）的單一真相來源：掃描範圍、出塊時間、分段查詢。
+import { JsonRpcProvider } from 'ethers'
+
 //
 //
 // 之前 WhaleTrackerPage 把 `DEPLOY_BLOCK = 10_874_200` 寫死——那是 **Ethereum
@@ -153,6 +155,37 @@ export type ChunkProgress = (done: number, total: number) => void
  * 一趟掃完——31 次而不是 93 次。呼叫端拿到原始 log 之後用 `interface.parseLog`
  * 還原成具名事件。
  */
+/**
+ * Large-range log RPCs per chain, used only when a chunk fails on the caller's own
+ * provider. Wallet RPCs for Base Sepolia default to sepolia.base.org, which caps
+ * eth_getLogs at 1,000 blocks (measured 2026-09-23) — every CHUNK_SIZE request there
+ * fails. Tenderly's public gateway answered a 3,000,000-block range with CORS open.
+ * Only chains listed here fall back, and only after confirming the caller's chain id,
+ * so a local Anvil chain never gets logs from another network.
+ */
+export const LOG_FALLBACK_RPC: Record<number, string> = {
+  84532: 'https://base-sepolia.gateway.tenderly.co',
+}
+
+type FallbackLogProvider = JsonRpcProvider
+
+const fallbackCache = new Map<number, JsonRpcProvider>()
+
+async function fallbackLogProvider(provider: unknown): Promise<FallbackLogProvider | null> {
+  try {
+    const net = await (provider as { getNetwork?: () => Promise<{ chainId: bigint }> })?.getNetwork?.()
+    const chainId = net ? Number(net.chainId) : NaN
+    const url = LOG_FALLBACK_RPC[chainId]
+    if (!url) return null
+    if (!fallbackCache.has(chainId)) {
+      fallbackCache.set(chainId, new JsonRpcProvider(url, chainId, { staticNetwork: true }))
+    }
+    return fallbackCache.get(chainId)!
+  } catch {
+    return null
+  }
+}
+
 export async function getLogsChunked(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   provider: { getLogs: (f: any) => Promise<any[]> },
@@ -167,11 +200,18 @@ export async function getLogsChunked(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const all: any[] = []
   let done = 0
+  let fallback: FallbackLogProvider | null | undefined
   for (const [from, to] of ranges) {
     try {
       all.push(...(await provider.getLogs({ ...filter, fromBlock: from, toBlock: to })))
     } catch (e) {
-      console.warn('[getLogsChunked] chunk failed', from, '-', to, e)
+      fallback = fallback === undefined ? await fallbackLogProvider(provider) : fallback
+      try {
+        if (!fallback) throw e
+        all.push(...(await fallback.getLogs({ ...filter, fromBlock: from, toBlock: to })))
+      } catch {
+        console.warn('[getLogsChunked] chunk failed', from, '-', to, e)
+      }
     }
     done += 1
     onChunk?.(done, ranges.length)
@@ -206,12 +246,21 @@ export async function queryLogsChunked(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const all: any[] = []
   let done = 0
+  let fallback: FallbackLogProvider | null | undefined
   for (const [from, to] of ranges) {
     try {
       all.push(...(await contract.queryFilter(filter, from, to)))
     } catch (e) {
-      console.warn('[queryLogsChunked] chunk failed', from, '-', to, e)
-      onChunkFailed?.(from, to, e)
+      // Same fallback as getLogsChunked, through the contract re-bound to the log RPC.
+      const c = contract as { connect?: (r: unknown) => typeof contract; runner?: { provider?: unknown } }
+      fallback = fallback === undefined ? await fallbackLogProvider(c.runner?.provider) : fallback
+      try {
+        if (!fallback || typeof c.connect !== 'function') throw e
+        all.push(...(await c.connect(fallback).queryFilter(filter, from, to)))
+      } catch {
+        console.warn('[queryLogsChunked] chunk failed', from, '-', to, e)
+        onChunkFailed?.(from, to, e)
+      }
     }
     done += 1
     onChunk?.(done, ranges.length)
