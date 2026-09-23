@@ -146,8 +146,8 @@ npm test
 - Liquidation currently forfeits the position's remaining collateral
   (5% to the liquidator, remainder to the InsuranceVault) instead of
   refunding the owner — intentional simplification for the prototype.
-- `MockUSDC.mint` is unrestricted (test convenience); the faucet
-  (1,000 mUSDC / 24h) is the intended user path.
+- `MockUSDC.mint` is owner/swap-router only (audit PA-3); users get test
+  margin from `faucet()` — 1,000 mUSDC per address per 24 h, EOAs only.
 - ADL and portfolio margin are opt-in flags, off by default.
 
 ## Stack
@@ -167,7 +167,7 @@ npm test
 1. 本 repo 的合約由全新金鑰部署，owner 是 `0xB98BA27B…3a02`。稽核提到的舊 deployer 私鑰
    （曾出現在 git 歷史中，2026-08-07 已輪替）**不擁有本 repo 任何合約**。
    該段 git 歷史因完整匯入而仍存在於本 repo，請勿使用其中任何金鑰。
-2. `MockUSDC.mint` 無權限控管（測試網便利設計）
+2. `MockUSDC.mint` 只限 owner 與 swap router（稽核 PA-3）；一般使用者走 `faucet()`（每地址 24 小時 1,000 mUSDC）
 3. `PepeAMM` 未在本 repo 部署
 
 ## Disclaimer

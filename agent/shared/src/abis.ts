@@ -23,6 +23,11 @@ export const AGENT_SESSION_MANAGER_ABI = [
   "function sessions(uint256) view returns (address user, address agent, uint256 maxMarginPerTrade, uint256 totalMarginBudget, uint256 spentMargin, uint256 maxLeverage, uint256 expiry, bool revoked)",
   "function openPositionForSession(uint256 sessionId, bytes32 asset, bool isLong, uint256 margin, uint256 leverage, address copiedFrom) payable returns (uint256 positionId)",
   "function closePositionForSession(uint256 sessionId, uint256 positionId)",
+  // write.ts parses positionId out of this event. Without it in the ABI, parseLog
+  // returned null for every log and openPositionForSession reported positionId
+  // undefined (found by the e2e demo, 2026-09-23).
+  "event SessionOpenedPosition(uint256 indexed sessionId, address indexed agent, uint256 positionId, uint256 margin)",
+  "event SessionClosedPosition(uint256 indexed sessionId, address indexed agent, uint256 positionId)",
 ] as const;
 
 export const MOCK_ORACLE_ABI = [

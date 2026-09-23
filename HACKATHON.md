@@ -63,6 +63,25 @@ Deployer / owner: `0xB98BA27B606ae062CCC80071E5b9F81238DB3a02` (fresh key, never
 
 Verified on-chain after deploy: exchange owner = deployer; exchange oracle / usdc / feeRouter / insuranceVault and SessionManager.exchange, FeeRouter.exchange, InsuranceVault.exchange all point at this repo's contracts; the original project's FeeRouter still points at its own exchange (untouched).
 
+### Post-deploy operations (2026-09-23, this repo's contracts only)
+
+| Change | Why | Tx |
+|---|---|---|
+| `AggregatorOracle.setAllowSingleSource(true)` | Chainlink has no feed for these assets on Base Sepolia; allow Pyth-only | `0x92b66fda…` |
+| `MockOracle.addAsset` × 7 (sNVDA, sMSFT, sGOOGL, sGOLD, sBOND, sICLN, sESGU) at live prices | Deploy.s.sol registered only 4 assets, so the keeper failed 7/11 writes | 7 txs |
+| `MockOracle.transferOwnership` → keeper `0x3649247f6C7BBA2Dc9c4E88Cc24d0728d3203e95` | the GitHub `KEEPER_PRIVATE_KEY` secret must not be the exchange owner | `0x20e776fc…` |
+| `PerpetualExchange.setExecutionFee(1e13)` (0.00001 ETH; contract default 0.001 ETH) | at ~0.011 gwei the default fee was ~200× the gas it is meant to cover | `0x3694dcb0…` |
+
+**Pyth relay caveat:** Pyth on Base Sepolia is pull-based and its sBTC/sETH prices were ~13 days old on 2026-09-23 (`PriceIsStale`, threshold 1 h), so the keeper currently falls back to CoinGecko/Yahoo for every asset. Do not claim live Pyth pricing in the submission unless a Hermes price-update push is added.
+
+The Base Sepolia Keeper workflow runs with the keeper key (GitHub secrets `KEEPER_PRIVATE_KEY`, `BASE_SEPOLIA_RPC_URL`); first run 2026-09-23 11:19 UTC succeeded.
+
+## End-to-end demo (P0-3)
+
+`agent/examples/e2e-demo.ts` replays the full story with three separate keys and writes [`demo/RUN.md`](demo/RUN.md). Latest run (session #2): user deposits and opens a capped session → signs the EIP-712 VC → agent buys data and a trader signal over x402 (Circle USDC to the seller) → seller routes the signal fee 70/20/10 on chain → agent opens inside the caps → an over-cap order is **mined and reverted** with `MarginExceedsPerTradeCap` → agent closes → user revokes → a post-revoke order is **mined and reverted** with `SessionIsRevoked`.
+
+The demo surfaced an SDK bug, fixed here: `AGENT_SESSION_MANAGER_ABI` lacked the `SessionOpenedPosition` event, so `openPositionForSession` always returned `positionId: undefined` (and so did the MCP `open_position` tool).
+
 ## CI baseline at import (local run, 2026-09-23)
 - Agent CI: install / typecheck / tests / bundle drift check — all pass
 - Frontend CI: install / build / tests — all pass (33 files, 494 tests)
