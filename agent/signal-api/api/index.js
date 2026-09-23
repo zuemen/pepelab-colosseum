@@ -60521,7 +60521,7 @@ var SETTLEMENT_TOKEN2 = resolveSettlementToken();
 var PRICE_SIGNALS = 0.01;
 var PRICE_ORACLE = 5e-3;
 var MAX_TIMEOUT_SECONDS = 60;
-var DEFAULT_DEMO_TRADER = "0xE80A81360608C1342e66743F70a00f75d792Eb93";
+var DEFAULT_DEMO_TRADER = "0x2F188C934ffFa25D2af8354eb18fAE65038F5467";
 var provider = makeProvider();
 var contracts2 = makeContracts(provider);
 var VERIFIER_IS_EPHEMERAL = (() => {

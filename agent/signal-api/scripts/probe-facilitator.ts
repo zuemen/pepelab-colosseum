@@ -123,7 +123,7 @@ if (MODE === "verify-latency") {
 if (MODE === "challenge-latency") {
   const api = (process.env.API_URL ?? "").replace(/\/$/, "");
   if (!api) throw new Error("challenge-latency 需要 API_URL");
-  for (const path of ["/oracle/sBTC", "/signals/0xE80A81360608C1342e66743F70a00f75d792Eb93"]) {
+  for (const path of ["/oracle/sBTC", "/signals/0x2F188C934ffFa25D2af8354eb18fAE65038F5467"]) {
     const out = [];
     for (let i = 0; i < SAMPLES; i += 1) {
       const t0 = performance.now();
