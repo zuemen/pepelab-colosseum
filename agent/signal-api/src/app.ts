@@ -338,31 +338,30 @@ export function createApp(): Hono<{ Variables: AppVariables }> {
       // 誠實描述金流：x402 的付款直接進 payTo，70/20/10 是平台事後另外送的一筆
       // 交易。把兩者寫成同一件事會讓讀者以為買方付的那筆錢就是被分潤的那筆錢。
       revenueModel:
-        `x402 付款直接進 payTo（${PAY_TO}）；70/20/10 分潤是平台另外的一筆交易，` +
-        `經 FeeRouter.routeExternalRevenue 上鏈，累計可於 /revenue 查詢。` +
-        `兩者是不同的兩筆交易。` +
-        `2026-09-17 起分潤改為非同步：回應裡的 settled 代表「已排入結算佇列」，` +
-        `不代表已經上鏈；由單一 worker 定期批次結算（見 docs/KNOWN_LIMITATIONS.md §14）。`,
+        `x402 payments go straight to payTo (${PAY_TO}). The 70/20/10 split is a separate ` +
+        `on-chain transaction through FeeRouter.routeExternalRevenue; totals are at /revenue. ` +
+        `The split is asynchronous: "settled" in a response means queued for settlement, ` +
+        `not yet on chain; a single worker settles in batches (docs/KNOWN_LIMITATIONS.md §14).`,
       endpoints: {
-        "GET /signals/:trader": { price: `$${PRICE_SIGNALS}`, paid: true, desc: "trader 績效 + 開倉建議" },
-        "GET /oracle/:asset": { price: `$${PRICE_ORACLE}`, paid: true, desc: "決策級快照：價格 / funding / OI 失衡 / 預估清算價 / edge 建議（long·short·no_trade）。與 /signals 一樣：收到款後把分潤記進結算佇列，回應帶 settled（是否成功排入佇列，不代表已上鏈）" },
-        "GET /revenue": { price: "free", desc: "鏈上 70/20/10 累計（可選 ?trader=）" },
+        "GET /signals/:trader": { price: `$${PRICE_SIGNALS}`, paid: true, desc: "Trader performance + entry suggestion" },
+        "GET /oracle/:asset": { price: `$${PRICE_ORACLE}`, paid: true, desc: "Decision snapshot: price / funding / OI imbalance / estimated liquidation price / edge recommendation (long · short · no_trade). Like /signals, the fee is queued for the revenue split; \"settled\" means queued, not on chain" },
+        "GET /revenue": { price: "free", desc: "On-chain 70/20/10 totals (optional ?trader=)" },
         "GET /candles/:symbol": {
           price: "free",
           desc:
-            "K 線 OHLCV。?interval= 預設 1h，?limit= 預設 300（上限 " +
-            `${MAX_LIMIT}）。回應帶 source 出處，圖表須標示。`,
+            "OHLCV candles. ?interval= defaults to 1h, ?limit= defaults to 300 (max " +
+            `${MAX_LIMIT}). The response carries its data source; charts must show it.`,
           intervals: INTERVAL_KEYS,
         },
         "GET /benchmarks": {
           price: "free",
           desc:
-            "對照指數：S&P 500／黃金／比特幣，同一來源（Yahoo Finance）。" +
-            "?date=YYYY-MM-DD 加碼回該日或之前最近一個交易日的收盤。不做模擬保底，" +
-            "上游拿不到就在該指數的 error 欄位標明。",
+            "Benchmarks: S&P 500 / gold / bitcoin from one source (Yahoo Finance). " +
+            "?date=YYYY-MM-DD also returns the close on or before that date. No synthetic fallback: " +
+            "if the upstream fails, that index carries an error field.",
         },
-        "GET /agent/:did/verification": { price: "free", desc: "ERC-8126 agent 驗證（ETV/SCV/WAV/WV + 0–100 風險分數，verifier 簽章）" },
-        "POST /demo/buy-signal": { price: "free", desc: "訪客試買（免費回訊號；真實 70/20/10 分潤見付費 x402 端點 + /revenue 累計）" },
+        "GET /agent/:did/verification": { price: "free", desc: "Agent verification, ERC-8126 draft (ETV/SCV/WAV/WV + 0–100 risk score, verifier-signed)" },
+        "POST /demo/buy-signal": { price: "free", desc: "Guest trial (free signal; the real 70/20/10 split happens on the paid x402 endpoints, see /revenue)" },
       },
       example: {
         curl: "curl -s <BASE_URL>/  # discover, then pay with any x402 client",
@@ -636,13 +635,13 @@ export function createApp(): Hono<{ Variables: AppVariables }> {
       "GET /signals/[trader]": {
         price: `$${PRICE_SIGNALS}`,
         network: NETWORK,
-        config: { description: "Trader 即時績效摘要 + 開倉建議", maxTimeoutSeconds: MAX_TIMEOUT_SECONDS },
+        config: { description: "Trader performance summary + entry suggestion", maxTimeoutSeconds: MAX_TIMEOUT_SECONDS },
       },
       "GET /oracle/[asset]": {
         price: `$${PRICE_ORACLE}`,
         network: NETWORK,
         config: {
-          description: "決策級快照：價格 + funding + OI 失衡 + 預估清算價 + edge 建議",
+          description: "Decision snapshot: price + funding + OI imbalance + estimated liquidation price + edge recommendation",
           maxTimeoutSeconds: MAX_TIMEOUT_SECONDS,
         },
       },

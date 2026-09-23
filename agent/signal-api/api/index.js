@@ -60685,22 +60685,22 @@ function createApp() {
       payTo: PAY_TO,
       // 誠實描述金流：x402 的付款直接進 payTo，70/20/10 是平台事後另外送的一筆
       // 交易。把兩者寫成同一件事會讓讀者以為買方付的那筆錢就是被分潤的那筆錢。
-      revenueModel: `x402 \u4ED8\u6B3E\u76F4\u63A5\u9032 payTo\uFF08${PAY_TO}\uFF09\uFF1B70/20/10 \u5206\u6F64\u662F\u5E73\u53F0\u53E6\u5916\u7684\u4E00\u7B46\u4EA4\u6613\uFF0C\u7D93 FeeRouter.routeExternalRevenue \u4E0A\u93C8\uFF0C\u7D2F\u8A08\u53EF\u65BC /revenue \u67E5\u8A62\u3002\u5169\u8005\u662F\u4E0D\u540C\u7684\u5169\u7B46\u4EA4\u6613\u30022026-09-17 \u8D77\u5206\u6F64\u6539\u70BA\u975E\u540C\u6B65\uFF1A\u56DE\u61C9\u88E1\u7684 settled \u4EE3\u8868\u300C\u5DF2\u6392\u5165\u7D50\u7B97\u4F47\u5217\u300D\uFF0C\u4E0D\u4EE3\u8868\u5DF2\u7D93\u4E0A\u93C8\uFF1B\u7531\u55AE\u4E00 worker \u5B9A\u671F\u6279\u6B21\u7D50\u7B97\uFF08\u898B docs/KNOWN_LIMITATIONS.md \xA714\uFF09\u3002`,
+      revenueModel: `x402 payments go straight to payTo (${PAY_TO}). The 70/20/10 split is a separate on-chain transaction through FeeRouter.routeExternalRevenue; totals are at /revenue. The split is asynchronous: "settled" in a response means queued for settlement, not yet on chain; a single worker settles in batches (docs/KNOWN_LIMITATIONS.md \xA714).`,
       endpoints: {
-        "GET /signals/:trader": { price: `$${PRICE_SIGNALS}`, paid: true, desc: "trader \u7E3E\u6548 + \u958B\u5009\u5EFA\u8B70" },
-        "GET /oracle/:asset": { price: `$${PRICE_ORACLE}`, paid: true, desc: "\u6C7A\u7B56\u7D1A\u5FEB\u7167\uFF1A\u50F9\u683C / funding / OI \u5931\u8861 / \u9810\u4F30\u6E05\u7B97\u50F9 / edge \u5EFA\u8B70\uFF08long\xB7short\xB7no_trade\uFF09\u3002\u8207 /signals \u4E00\u6A23\uFF1A\u6536\u5230\u6B3E\u5F8C\u628A\u5206\u6F64\u8A18\u9032\u7D50\u7B97\u4F47\u5217\uFF0C\u56DE\u61C9\u5E36 settled\uFF08\u662F\u5426\u6210\u529F\u6392\u5165\u4F47\u5217\uFF0C\u4E0D\u4EE3\u8868\u5DF2\u4E0A\u93C8\uFF09" },
-        "GET /revenue": { price: "free", desc: "\u93C8\u4E0A 70/20/10 \u7D2F\u8A08\uFF08\u53EF\u9078 ?trader=\uFF09" },
+        "GET /signals/:trader": { price: `$${PRICE_SIGNALS}`, paid: true, desc: "Trader performance + entry suggestion" },
+        "GET /oracle/:asset": { price: `$${PRICE_ORACLE}`, paid: true, desc: 'Decision snapshot: price / funding / OI imbalance / estimated liquidation price / edge recommendation (long \xB7 short \xB7 no_trade). Like /signals, the fee is queued for the revenue split; "settled" means queued, not on chain' },
+        "GET /revenue": { price: "free", desc: "On-chain 70/20/10 totals (optional ?trader=)" },
         "GET /candles/:symbol": {
           price: "free",
-          desc: `K \u7DDA OHLCV\u3002?interval= \u9810\u8A2D 1h\uFF0C?limit= \u9810\u8A2D 300\uFF08\u4E0A\u9650 ${MAX_LIMIT}\uFF09\u3002\u56DE\u61C9\u5E36 source \u51FA\u8655\uFF0C\u5716\u8868\u9808\u6A19\u793A\u3002`,
+          desc: `OHLCV candles. ?interval= defaults to 1h, ?limit= defaults to 300 (max ${MAX_LIMIT}). The response carries its data source; charts must show it.`,
           intervals: INTERVAL_KEYS
         },
         "GET /benchmarks": {
           price: "free",
-          desc: "\u5C0D\u7167\u6307\u6578\uFF1AS&P 500\uFF0F\u9EC3\u91D1\uFF0F\u6BD4\u7279\u5E63\uFF0C\u540C\u4E00\u4F86\u6E90\uFF08Yahoo Finance\uFF09\u3002?date=YYYY-MM-DD \u52A0\u78BC\u56DE\u8A72\u65E5\u6216\u4E4B\u524D\u6700\u8FD1\u4E00\u500B\u4EA4\u6613\u65E5\u7684\u6536\u76E4\u3002\u4E0D\u505A\u6A21\u64EC\u4FDD\u5E95\uFF0C\u4E0A\u6E38\u62FF\u4E0D\u5230\u5C31\u5728\u8A72\u6307\u6578\u7684 error \u6B04\u4F4D\u6A19\u660E\u3002"
+          desc: "Benchmarks: S&P 500 / gold / bitcoin from one source (Yahoo Finance). ?date=YYYY-MM-DD also returns the close on or before that date. No synthetic fallback: if the upstream fails, that index carries an error field."
         },
-        "GET /agent/:did/verification": { price: "free", desc: "ERC-8126 agent \u9A57\u8B49\uFF08ETV/SCV/WAV/WV + 0\u2013100 \u98A8\u96AA\u5206\u6578\uFF0Cverifier \u7C3D\u7AE0\uFF09" },
-        "POST /demo/buy-signal": { price: "free", desc: "\u8A2A\u5BA2\u8A66\u8CB7\uFF08\u514D\u8CBB\u56DE\u8A0A\u865F\uFF1B\u771F\u5BE6 70/20/10 \u5206\u6F64\u898B\u4ED8\u8CBB x402 \u7AEF\u9EDE + /revenue \u7D2F\u8A08\uFF09" }
+        "GET /agent/:did/verification": { price: "free", desc: "Agent verification, ERC-8126 draft (ETV/SCV/WAV/WV + 0\u2013100 risk score, verifier-signed)" },
+        "POST /demo/buy-signal": { price: "free", desc: "Guest trial (free signal; the real 70/20/10 split happens on the paid x402 endpoints, see /revenue)" }
       },
       example: {
         curl: "curl -s <BASE_URL>/  # discover, then pay with any x402 client",
@@ -60903,13 +60903,13 @@ function createApp() {
       "GET /signals/[trader]": {
         price: `$${PRICE_SIGNALS}`,
         network: NETWORK,
-        config: { description: "Trader \u5373\u6642\u7E3E\u6548\u6458\u8981 + \u958B\u5009\u5EFA\u8B70", maxTimeoutSeconds: MAX_TIMEOUT_SECONDS }
+        config: { description: "Trader performance summary + entry suggestion", maxTimeoutSeconds: MAX_TIMEOUT_SECONDS }
       },
       "GET /oracle/[asset]": {
         price: `$${PRICE_ORACLE}`,
         network: NETWORK,
         config: {
-          description: "\u6C7A\u7B56\u7D1A\u5FEB\u7167\uFF1A\u50F9\u683C + funding + OI \u5931\u8861 + \u9810\u4F30\u6E05\u7B97\u50F9 + edge \u5EFA\u8B70",
+          description: "Decision snapshot: price + funding + OI imbalance + estimated liquidation price + edge recommendation",
           maxTimeoutSeconds: MAX_TIMEOUT_SECONDS
         }
       }

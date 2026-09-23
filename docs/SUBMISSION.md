@@ -29,7 +29,7 @@ Agents drive all of it through an **MCP server** (`agent/mcp-server`: read tools
 
 ## 3. Proof: the replayable demo
 
-`agent/examples/e2e-demo.ts` runs the whole story with **three separate keys** (User, Agent, Seller). Latest run: [`demo/RUN.md`](../demo/RUN.md). Every step has a BaseScan link.
+`agent/examples/e2e-demo.ts` runs the whole story with **three separate keys** (User, Agent, Seller): eight steps and ten on-chain transactions. Latest run: [`demo/RUN.md`](../demo/RUN.md). Every on-chain step links to BaseScan; step ② is an off-chain signature.
 
 | # | Actor | Step | On chain |
 |---|---|---|---|
@@ -103,8 +103,10 @@ Source of truth: `frontend/src/contracts/addresses.ts`. Deployment details and o
 | CopyTracker | `0xF19E53dDBbD6CfDFb50deF952CA5f956ed08d0C4` |
 | StrategyRegistry | `0x6Af6BEBC8fF0CE354e6E8A97921E1C5Ea95a7DE8` |
 | KYCRegistry | `0x34D644b9d58c1D4B0Cb805BA49440F53Ca0378d0` |
+| TraderStake | `0x790fd51ad485013C5b87FD7765679461675A31FD` |
+| MockSwapRouter | `0xCebdae595260F31541E44FBFfC80614d8B73C87a` |
 
-Judge sandbox: session **#3** (agent `0xd3c6a11e…0EB7`, 50 per trade, 3x, sBTC/sETH) stays active until 2026-12-12 for the Agent Mode "try it" button.
+Judge sandbox: session **#3** (agent `0xd3c6a11e…0EB7`, 50 per trade, 150 budget, 3x, sBTC/sETH; created 2026-09-23, tx `0xc3d6d00f…4336`) stays active until 2026-12-12. The Agent Mode "try it" button uses the newest active session, which is #3 unless a newer one is opened.
 
 ## 7. Run it locally
 
@@ -148,7 +150,7 @@ x402 turns data into something an agent can buy without accounts or API keys. Th
 
 - On-chain perp DEX volume was $593.3B over 30 days (DefiLlama via [CoinLaw, 2026-09-09](https://coinlaw.io/perpetual-futures-statistics/)).
 - Hyperliquid alone did $239.2B over 30 days ([The Crypto Times, 2026-09-17](https://www.cryptotimes.io/2026/09/17/hyperliquid-leads-30-day-perpetual-volume-with-nearly-240b/)).
-- Perp volume on Base was $3.1B over the same 30 days (same source). That is a small base with room to grow for agent-driven flow.
+- Perp volume on Base was $3.1B over 30 days (DefiLlama via The Crypto Times, 2026-09-17; a different window from the CoinLaw figure). That is a small base with room to grow for agent-driven flow.
 - x402 is an open standard governed by the x402 Foundation under the Linux Foundation since 2026-07-14 ([LF](https://www.linuxfoundation.org/press/linux-foundation-announces-operational-launch-of-x402-foundation-to-standardize-internet-native-payments-for-ai-agents-and-applications)). Artemis estimates that most of its current traffic is protocol signaling rather than commerce ([Forkast, 2026-08-04](https://finance.yahoo.com/markets/crypto/articles/x402-foundation-activated-27-old-152440828.html)). Paid machine-to-machine data is early; that is the opportunity, not a claim of traction.
 
 ## 9. Competitive landscape

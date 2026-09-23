@@ -1,7 +1,7 @@
 {
-  "digest": "4149eef531d70d66",
+  "digest": "5fd4790bffc16f47",
   "files": {
-    "app.ts": "c543125ff1b306e9",
+    "app.ts": "417c2ab96c5180f7",
     "benchmarks.test.ts": "8c3860fd09f43ec0",
     "benchmarks.ts": "bac063beeb2f0f45",
     "candles.ts": "26981626086f2838",
