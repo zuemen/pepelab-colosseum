@@ -9,6 +9,15 @@ import { LOCALES, pickLocale } from './src/locales/catalogs';
 
 const PORT = 8081;
 
+// Sub-path hosting (GitHub Pages serves the repo under /<repo>/). Unset = '/', which
+// keeps local dev and every existing deployment exactly as before.
+const BASE = (process.env.VITE_BASE_PATH?.trim() || '/').replace(/\/?$/, '/');
+
+// Code under src/ references public files by root path ('/assets/…', '/avatars/…').
+// Vite's `base` rewrites index.html and imported assets, not string literals, so under
+// a sub-path those images would 404. Only active when BASE is not '/'.
+const PUBLIC_DIRS = /(['"`])\/(assets|avatars|fonts|logo|images|icons)\//g;
+
 export default defineConfig(({ mode }) => {
   // 這個 build 出貨的語言。VITE_LOCALE 可能來自 shell / Vercel 的環境變數，也可能來自
   // .env* 檔案，兩邊都要看：app 讀的是 import.meta.env（Vite 會把兩種來源都注入），
@@ -20,8 +29,18 @@ export default defineConfig(({ mode }) => {
   const { htmlLang, catalog } = LOCALES[locale];
 
   return {
+    base: BASE,
     plugins: [
       react(),
+      BASE !== '/' && {
+        name: 'pepefi-public-base',
+        enforce: 'pre' as const,
+        transform(code: string, id: string) {
+          if (!/\/src\/.*\.[jt]sx?$/.test(id.replace(/\\/g, '/'))) return null;
+          PUBLIC_DIRS.lastIndex = 0;
+          return PUBLIC_DIRS.test(code) ? code.replace(PUBLIC_DIRS, `$1${BASE}$2/`) : null;
+        },
+      },
       {
         // index.html 的 lang / title / description 從 catalog 填入，讓語言只有一個來源。
         // order: 'pre' 是必要的——Vite 內建的 HTML env 替換也吃 %FOO% 語法，先跑完這裡

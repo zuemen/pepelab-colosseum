@@ -10,7 +10,7 @@ name: Agent CI
 # 測試回歸應該擋的是合併，不是喂價。
 on:
   push:
-    branches: [master]
+    branches: [master, hackathon/colosseum-worldsfair]
     paths:
       - 'agent/**'
       - '.github/workflows/agent-ci.yml'

@@ -1,0 +1,65 @@
+name: Deploy frontend to GitHub Pages
+
+# Public, wallet-free demo for judges: https://zuemen.github.io/pepelab-colosseum/agent-mode
+# English build (VITE_LOCALE=en) served under the repo sub-path (VITE_BASE_PATH).
+# This repo's own deployment only — it never uses the original project's Vercel.
+on:
+  push:
+    branches: [hackathon/colosseum-worldsfair]
+    paths:
+      - 'frontend/**'
+      - '.github/workflows/pages.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: '20'
+          cache: yarn
+          cache-dependency-path: frontend/yarn.lock
+
+      - name: Install
+        run: yarn install --frozen-lockfile
+
+      - name: Build (English, sub-path)
+        env:
+          VITE_LOCALE: en
+          VITE_BASE_PATH: /pepelab-colosseum/
+        run: yarn build
+
+      # GitHub Pages has no SPA rewrites: serve index.html for unknown paths so a
+      # direct link to /agent-mode loads the app instead of a 404.
+      - name: SPA fallback
+        run: cp dist/index.html dist/404.html
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: frontend/dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

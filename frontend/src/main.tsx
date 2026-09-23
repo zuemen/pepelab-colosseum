@@ -18,7 +18,10 @@ const router = createBrowserRouter([
     errorElement: <ErrorBoundary />,
     children: routesSection,
   },
-]);
+], {
+  // '/' normally; '/<repo>' when built with VITE_BASE_PATH for GitHub Pages.
+  basename: import.meta.env.BASE_URL.replace(/\/$/, '') || '/',
+});
 
 const root = createRoot(document.getElementById('root')!);
 
