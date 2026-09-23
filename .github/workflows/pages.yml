@@ -47,10 +47,14 @@ jobs:
           VITE_ASSETS_DIR: /pepelab-colosseum
         run: yarn build
 
-      # GitHub Pages has no SPA rewrites: serve index.html for unknown paths so a
-      # direct link to /agent-mode loads the app instead of a 404.
+      # GitHub Pages has no SPA rewrites: serve index.html for unknown paths so
+      # deep links load the app. 404.html alone still answers with HTTP 404, which
+      # link checkers and previews treat as broken, so the judge entry point also
+      # gets its own copy (Pages serves /agent-mode from agent-mode.html with 200).
       - name: SPA fallback
-        run: cp dist/index.html dist/404.html
+        run: |
+          cp dist/index.html dist/404.html
+          cp dist/index.html dist/agent-mode.html
 
       - uses: actions/upload-pages-artifact@v3
         with:
