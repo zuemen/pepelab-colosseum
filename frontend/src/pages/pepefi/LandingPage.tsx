@@ -209,7 +209,7 @@ export default function LandingPage() {
               }} />
               <Box
                 component="img"
-                src="/avatars/pepe-01.png"
+                src="/assets/images/pepefi/pepe-hero.webp"
                 alt="PepeLab Mascot"
                 sx={{
                   width: '100%', height: '100%',
