@@ -83,7 +83,7 @@ The Base Sepolia Keeper workflow runs with the keeper key (GitHub secrets `KEEPE
 | Deploy `SpendPermissionMarginFunder` at `0x20277169a755C690b98F0894EF57AF835469C9Af` (`script/DeploySpendPermissionFunder.s.sol`) | Base Accounts fund agent margin through Base Spend Permissions | `0x5f6ecfa0…` |
 | `PerpetualExchange.setAgentAuthorized(funder, true)` | `depositMarginFor` only accepts authorized contracts. The exchange now trusts three contracts to act for users: AgentSessionManager, CopyTracker, and this funder, which only calls `depositMarginFor` | `0x4d07412c…` |
 
-Source: Sourcify exact match. End-to-end run from a Base Account: [`demo/SPEND_PERMISSIONS_RUN.md`](demo/SPEND_PERMISSIONS_RUN.md).
+Source: Sourcify exact match and Blockscout full match. End-to-end run from a Base Account: [`demo/SPEND_PERMISSIONS_RUN.md`](demo/SPEND_PERMISSIONS_RUN.md).
 
 ## End-to-end demo (P0-3)
 

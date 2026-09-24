@@ -112,7 +112,7 @@ Source of truth: `frontend/src/contracts/addresses.ts`. Deployment details and o
 | MockSwapRouter | [`0xCebdae595260F31541E44FBFfC80614d8B73C87a`](https://base-sepolia.blockscout.com/address/0xCebdae595260F31541E44FBFfC80614d8B73C87a?tab=contract) |
 | SpendPermissionMarginFunder (Base Spend Permissions, 2026-09-24) | [`0x20277169a755C690b98F0894EF57AF835469C9Af`](https://base-sepolia.blockscout.com/address/0x20277169a755C690b98F0894EF57AF835469C9Af?tab=contract) |
 
-Source code for all 16 contracts of the 2026-09-23 deployment (the table plus three oracle adapters and the x402 InsuranceVault) is verified on [Blockscout](https://base-sepolia.blockscout.com) and [Sourcify](https://sourcify.dev) as an exact match (creation and runtime bytecode), checked 2026-09-24. The SpendPermissionMarginFunder added on 2026-09-24 is an exact match on Sourcify. Click an address to read the code.
+Source code for all 16 contracts of the 2026-09-23 deployment (the table plus three oracle adapters and the x402 InsuranceVault) is verified on [Blockscout](https://base-sepolia.blockscout.com) and [Sourcify](https://sourcify.dev) as an exact match (creation and runtime bytecode), checked 2026-09-24. The SpendPermissionMarginFunder added on 2026-09-24 is verified on both as well (Sourcify exact match; Blockscout full match, checked 2026-09-25). Click an address to read the code.
 
 Judge sandbox: session **#3** (agent `0xd3c6a11e…0EB7`, 50 per trade, 150 budget, 3x, sBTC/sETH; created 2026-09-23, tx `0xc3d6d00f…4336`) stays active until 2026-12-12. The Agent Mode "try it" button uses the newest active session, which is #3 unless a newer one is opened.
 
