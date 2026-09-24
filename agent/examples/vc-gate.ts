@@ -3,7 +3,8 @@
 // agent 不建立 VC——VC 由使用者本人在前端 /sessions 簽發，這裡只載入並出示/驗證。
 import fs from "node:fs";
 import {
-  verifyAuthorizationVC, vcId, type AuthorizationVC,
+  verifyAuthorizationVC, verifyAuthorizationVCWithProvider, makeProvider, vcId,
+  type AuthorizationVC, type Erc1271Reader, type VerifyResult,
 } from "@pepelab/shared";
 
 export const AUDIT_PATH = process.env.AUDIT_PATH?.trim() || "audit/trades.jsonl";
@@ -31,11 +32,38 @@ export interface VcCheck {
 /** 本地驗 VC（不上鏈）：驗章（含過期）+ sessionId 相符 + holder==本 agent。
  *  鏈上交叉比對（issuer==session.user、未撤銷）由 openPositionForSession 帶 authVc 時執行。 */
 export function localVerifyVc(vc: AuthorizationVC | null, agentAddress: string, sessionId: number): VcCheck {
-  if (!vc) return { ok: false, reason: "缺 VC（AGENT_AUTH_VC_PATH 未設或檔案不存在/解析失敗）", issuerDid: null, id: null, expiry: null };
+  if (!vc) return missingVc();
+  return gateResult(vc, verifyAuthorizationVC(vc), agentAddress, sessionId);
+}
+
+/** 同 localVerifyVc，但也接受智慧帳戶（例如 Base Account）簽的 VC：ecrecover 不過時，
+ *  改用 ERC-1271（issuer 合約的 isValidSignature）在鏈上驗章。EOA 簽的 VC 不打 RPC，結果與 localVerifyVc 相同。 */
+export async function verifyVcForAgent(
+  vc: AuthorizationVC | null, agentAddress: string, sessionId: number, provider?: Erc1271Reader,
+): Promise<VcCheck> {
+  if (!vc) return missingVc();
+  const offline = verifyAuthorizationVC(vc);
+  if (offline.valid) return gateResult(vc, offline, agentAddress, sessionId);
+  let r: VerifyResult;
+  try {
+    r = await verifyAuthorizationVCWithProvider(vc, provider ?? makeProvider());
+  } catch (e) {
+    // 沒設 RPC 或 RPC 失敗：維持拒絕，把兩個原因都留下。
+    r = { valid: false, reason: `${offline.reason}；ERC-1271 驗章無法執行：${(e as Error).message}` };
+  }
+  return gateResult(vc, r, agentAddress, sessionId);
+}
+
+function missingVc(): VcCheck {
+  return { ok: false, reason: "缺 VC（AGENT_AUTH_VC_PATH 未設或檔案不存在/解析失敗）", issuerDid: null, id: null, expiry: null };
+}
+
+function gateResult(
+  vc: AuthorizationVC, r: VerifyResult, agentAddress: string, sessionId: number,
+): VcCheck {
   const id = vcId(vc);
   const expiry = vc.credentialSubject?.authorization?.expiry ?? null;
   const issuerDid = vc.issuer ?? null;
-  const r = verifyAuthorizationVC(vc);
   if (!r.valid) return { ok: false, reason: `VC 驗章失敗：${r.reason}`, issuerDid, id, expiry };
   if (r.sessionId !== sessionId) return { ok: false, reason: `VC sessionId(${r.sessionId}) ≠ 請求 ${sessionId}`, issuerDid, id, expiry };
   if (r.agent && agentAddress && r.agent.toLowerCase() !== agentAddress.toLowerCase())

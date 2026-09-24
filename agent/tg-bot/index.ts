@@ -13,7 +13,7 @@ import TelegramBot from "node-telegram-bot-api";
 
 /** sendMessage 的選項型別（隨套件版本而異，這裡取其宣告以免版本升級就編不過）。 */
 type SendMessageOptions = Parameters<TelegramBot["sendMessage"]>[2];
-import { openPositionForSession, getSession, verifyAuthorizationVC, type AuthorizationVC } from "@pepelab/shared";
+import { openPositionForSession, getSession, makeProvider, verifyAuthorizationVC, verifyAuthorizationVCWithProvider, type AuthorizationVC } from "@pepelab/shared";
 
 function req(k: string, hint = ""): string {
   const v = process.env[k]?.trim();
@@ -61,7 +61,7 @@ const MAX_MARGIN = Number(process.env.TG_MAX_MARGIN ?? "1000");
 const MIN_MARGIN = Number(process.env.TG_MIN_MARGIN ?? "10");
 
 // A-3：VC 必要。缺檔/壞檔/驗章失敗 → 啟動失敗（不進入「靜默無授權下單」狀態）。
-const VC: AuthorizationVC = (() => {
+const VC: AuthorizationVC = await (async () => {
   const p = req(
     "AGENT_AUTH_VC_PATH",
     "使用者簽發的授權 VC 路徑（前端 /sessions「Issue VC」匯出）。缺它就無法把下單歸因到簽發者。",
@@ -73,7 +73,9 @@ const VC: AuthorizationVC = (() => {
     console.error(`✗ 讀取/解析 VC 失敗(${p})：${(e as Error).message}`);
     process.exit(1);
   }
-  const v = verifyAuthorizationVC(parsed);
+  // EOA 用 ecrecover；Base Account 等智慧帳戶簽的憑證用 ERC-1271 在鏈上驗章。
+  const offline = verifyAuthorizationVC(parsed);
+  const v = offline.valid ? offline : await verifyAuthorizationVCWithProvider(parsed, makeProvider());
   if (!v.valid) {
     console.error(`✗ VC 驗證失敗：${v.reason}（請重新在前端簽發）`);
     process.exit(1);

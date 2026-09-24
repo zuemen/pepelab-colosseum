@@ -19,7 +19,7 @@ import {
   openPositionForSession,
   getSessionManagerAddress,
   agentDid,
-  verifyAuthorizationVC,
+  verifyAuthorizationVCWithProvider,
   parseOracleBody,
   parseSignalsBody,
   type AuthorizationVC,
@@ -143,7 +143,8 @@ async function executeOrSimulate(
     console.log(`  本來會下的單：${wouldBe}（模擬，未送鏈）。`);
     return;
   }
-  const v = verifyAuthorizationVC(AUTH_VC);
+  // EOA 用 ecrecover；Base Account 等智慧帳戶簽的憑證用 ERC-1271 在鏈上驗章。
+  const v = await verifyAuthorizationVCWithProvider(AUTH_VC, makeProvider());
   if (v.valid) {
     console.log(`🪪 授權憑證已驗證 ✓（issuer ${v.issuer} → agent ${v.agent}, session #${v.sessionId}）`);
   } else {

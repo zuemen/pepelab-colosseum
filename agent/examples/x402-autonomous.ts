@@ -27,7 +27,7 @@ import {
   openPositionForSession, getSession, agentDid, appendAudit,
   parseOracleBody as parseOracle, type Recommendation, type AuditRecord,
 } from "@pepelab/shared";
-import { loadVc, localVerifyVc, fetchAgentVerification, AUDIT_PATH } from "./vc-gate.ts";
+import { loadVc, verifyVcForAgent, fetchAgentVerification, AUDIT_PATH } from "./vc-gate.ts";
 
 // ── 決策參數（透明可調）──────────────────────────────────────────────────────
 const ENTRY_THRESHOLD = Number(process.env.X402_EDGE_ENTRY ?? "25"); // server 也用同門檻
@@ -158,7 +158,7 @@ async function main() {
 
   // VC/SSI 閘門（E1）：載入使用者簽發的授權 VC；缺檔/壞檔/無效 → 可研究但**不准下單**。
   const vc = loadVc();
-  const vcChk = localVerifyVc(vc, account.address, SESSION_ID);
+  const vcChk = await verifyVcForAgent(vc, account.address, SESSION_ID);
   console.log(`\nVC/SSI：${vcChk.ok ? "✓" : "✗"} ${vcChk.reason}` + (vcChk.issuerDid ? `（issuer ${vcChk.issuerDid}）` : ""));
   if (!vc) console.error("   ⚠ 缺有效 VC（AGENT_AUTH_VC_PATH）→ 本次只做研究，拒絕下單（不可否認鏈不成立）。");
 

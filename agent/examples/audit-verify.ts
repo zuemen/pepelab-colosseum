@@ -17,7 +17,7 @@
 //   • JSONL 沒有順序保證 → 現在驗 hash chain。
 import { ethers } from "ethers";
 import {
-  verifyAuthorizationVC, vcId, vcBinding, parseDidPkh, getSession, makeProvider, makeContracts,
+  verifyAuthorizationVC, verifyAuthorizationVCWithProvider, vcId, vcBinding, parseDidPkh, getSession, makeProvider, makeContracts,
   readAudit, verifyAuditChain, getSessionManagerAddress, resolveSettlementToken,
   type AuditRecord,
 } from "@pepelab/shared";
@@ -82,7 +82,9 @@ async function main() {
   const vc = loadVc();
   if (!vc) { bad("找不到 VC（設 AGENT_AUTH_VC_PATH 指向該筆所用的 VC）"); allOk = false; }
   else {
-    const v = verifyAuthorizationVC(vc);
+    // EOA 用 ecrecover（離線）；不過時再用 ERC-1271 驗智慧帳戶（例如 Base Account）簽的憑證。
+    const offline = verifyAuthorizationVC(vc);
+    const v = offline.valid ? offline : await verifyAuthorizationVCWithProvider(vc, makeProvider());
     if (v.valid) ok(`VC 簽章有效（issuer ${v.issuer}、holder ${v.agent}、session ${v.sessionId}）`);
     else { bad(`VC 簽章驗證失敗：${v.reason}`); allOk = false; }
 
