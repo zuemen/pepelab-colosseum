@@ -32,6 +32,7 @@ import { t, locale, interpolate } from 'src/locales'
 import { prettyError } from 'src/lib/pepefi/errorMessages'
 import { agentDid, shortDid } from 'src/lib/pepefi/did'
 import { useToast } from 'src/components/pepefi/ToastProvider'
+import BaseAccountSetupCard from 'src/components/pepefi/BaseAccountSetupCard'
 import { CHAIN_NAMES } from 'src/contracts/addresses'
 import {
   getSessionManager,
@@ -441,6 +442,16 @@ export default function SessionsPage() {
               </Button>
             </Box>
           </Card>
+
+          {/* Base Account + Base Spend Permission: the same caps, in one wallet batch */}
+          <BaseAccountSetupCard
+            agent={agent}
+            perTrade={perTrade}
+            budget={budget}
+            maxLeverage={maxLev}
+            hours={hours}
+            onDone={() => void fetchSessions()}
+          />
 
           {/* Session list */}
           <Card sx={{ p: 3, display: 'flex', flexDirection: 'column', gap: 2 }}>

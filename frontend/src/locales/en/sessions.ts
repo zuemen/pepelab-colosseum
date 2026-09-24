@@ -82,6 +82,32 @@ export const sessions: Catalog['sessions'] = {
     needsRealWallet: "Connect a real wallet to sign the VC (mock mode doesn't support signing)",
   },
 
+  /** Base Account + Base Spend Permission setup (one EIP-5792 batch). */
+  baseAccount: {
+    title: 'Fund the agent from a Base Account',
+    intro:
+      'With a Base Account (Coinbase Smart Wallet), one batch approves a Base Spend Permission to our funder, names the agent above as top-up agent, and opens a session with the caps above (assets sBTC and sETH). The Spend Permission caps how much margin can leave the wallet each day; the session caps what the agent does with it.',
+    dailyAllowance: 'Daily allowance (mUSDC)',
+    cta: 'Set up with one Base Account batch',
+    sending: 'Waiting for your wallet…',
+    checking: 'Checking the connected account…',
+    smart: 'Coinbase Smart Wallet detected.',
+    smartAddOwner: 'Coinbase Smart Wallet detected. The batch also adds SpendPermissionManager as an owner, which Spend Permissions need.',
+    undeployed: 'This wallet can batch calls; the Base Account will be created by this batch.',
+    notSmart: 'This is a regular wallet (EOA). Spend Permissions need a Base Account (Coinbase Smart Wallet).',
+    notCoinbase: 'This account is a contract but not a Coinbase Smart Wallet, so Spend Permissions cannot move its funds.',
+    wrongChain: 'Switch to Base Sepolia: the funder is deployed there.',
+    needAgent: 'Enter the agent address above first.',
+    unsupported: 'Your wallet does not support wallet_sendCalls (EIP-5792). Use a Base Account or Coinbase Wallet.',
+    done: 'Done: Spend Permission approved and session opened. Sign its credential in the list below, then give the agent the credential and this Spend Permission.',
+    failed: 'The batch failed: {reason}',
+    timeout: 'Submitted, but not confirmed after 90 seconds. Check your wallet; the session list refreshes when it lands.',
+    permissionLabel: 'Spend Permission for the agent (top_up_margin)',
+    copy: 'Copy',
+    balance: 'mUSDC in this account: {amount}. The agent can only top up margin the account actually holds.',
+    recordedRun: 'Recorded run on Base Sepolia',
+  },
+
   /** 匯出對話框。 */
   export: {
     title: '🔌 Connect your Agent — Session #{id}',
