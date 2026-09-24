@@ -33,6 +33,8 @@ import {
   type AuthorizationVC,
   type ContractTarget,
   jsonSafe,
+  topUpMargin,
+  type SpendPermissionJson,
 } from "@pepelab/shared";
 
 loadEnv();
@@ -219,6 +221,33 @@ server.tool(
         return fail(new Error(`authVcJson is not valid JSON: ${(e as Error).message}`));
       }
       const res = await closePositionForSession({ sessionId, positionId, authVc });
+      return res.ok ? ok(res) : fail(new Error(res.error));
+    } catch (err) {
+      return fail(err);
+    }
+  },
+);
+
+server.tool(
+  "top_up_margin",
+  "[WRITE] Move margin from the session user's Base Account into their exchange margin, through a Base Spend Permission the user approved for SpendPermissionMarginFunder. The Spend Permission caps how much can move per period; the session caps what the agent does with it. Needs AGENT_PRIVATE_KEY, SESSION_MANAGER_ADDRESS, SPEND_PERMISSION_FUNDER_ADDRESS (the funder is not deployed by default) and authVcJson, verified and cross-checked on chain like open_position.",
+  {
+    sessionId: z.number().int().nonnegative().describe("On-chain session id; its user must be the Base Account in the permission"),
+    permissionJson: z.string().min(1).describe("The SpendPermission the user approved, as JSON: account, spender, token, allowance, period, start, end, salt, extraData"),
+    amountUsdc: z.number().positive().describe("Amount of margin token to move (human units)"),
+    authVcJson: z.string().min(1).describe("User-signed authorization VC as a JSON string (required)"),
+  },
+  async ({ sessionId, permissionJson, amountUsdc, authVcJson }) => {
+    try {
+      let permission: SpendPermissionJson;
+      let authVc: AuthorizationVC;
+      try {
+        permission = JSON.parse(permissionJson) as SpendPermissionJson;
+        authVc = JSON.parse(authVcJson) as AuthorizationVC;
+      } catch (e) {
+        return fail(new Error(`permissionJson or authVcJson is not valid JSON: ${(e as Error).message}`));
+      }
+      const res = await topUpMargin({ sessionId, permission, amountUsdc, authVc });
       return res.ok ? ok(res) : fail(new Error(res.error));
     } catch (err) {
       return fail(err);

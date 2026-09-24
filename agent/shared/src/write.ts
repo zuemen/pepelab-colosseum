@@ -132,7 +132,7 @@ function resolveSession():
  * 並與鏈上 session 交叉比對（issuer==session.user、agent==session.agent）。
  * 回 null 代表通過；回字串代表拒絕原因（呼叫端據此拒絕下單）。
  */
-async function verifyVcAgainstChain(
+export async function verifyVcAgainstChain(
   vc: AuthorizationVC,
   sessionId: number,
   agentAddress: string,

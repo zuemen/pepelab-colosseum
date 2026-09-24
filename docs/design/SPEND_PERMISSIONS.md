@@ -38,10 +38,18 @@ Checks in the funder itself: the caller must be the account or its top-up agent;
 1. Deploy `SpendPermissionMarginFunder(SpendPermissionManager, exchange, MockUSDC)` on Base Sepolia.
 2. The exchange owner calls `setAgentAuthorized(funder, true)`, because `depositMarginFor` only accepts authorized contracts.
 
+Both are in `contracts/script/DeploySpendPermissionFunder.s.sol` (checks the chain id and that the broadcaster owns the exchange). A fork simulation without `--broadcast` ran successfully on 2026-09-24; nothing was sent. After deploying, set `SPEND_PERMISSION_FUNDER_ADDRESS` for the agent SDK and MCP server.
+
 **Trust change to weigh first:** the exchange's `authorizedAgents` list also allows `openPositionFor` and `closePositionFor` for any user. The funder's code never calls them, and its source can be verified, but authorizing it still adds a third contract to the list the exchange trusts (after `AgentSessionManager` and `CopyTracker`). A narrower alternative is a dedicated deposit-only role on the exchange, which would need a new exchange deployment.
+
+## Agent side
+
+- `agent/shared/src/topUp.ts`: `topUpMargin({ sessionId, permission, amountUsdc, authVc })` verifies the user's authorization VC and cross-checks it against the on-chain session (the same gate as opening a position), refuses requests that are wrong on their face (`validateTopUp`: spender, token, account = session user, amount within the allowance), then calls `funder.topUp`. Tests: `agent/examples/topup.test.ts`.
+- MCP tool `top_up_margin` (`agent/mcp-server`), with the same required `authVcJson`.
+- The session's user must be the Base Account itself for the two layers to line up. The authorization VC can now be issued by a smart account: `verifyAuthorizationVCWithProvider` accepts ERC-1271 signatures from deployed accounts (on the main branch, commit `0035d44`).
 
 ## Open items
 
-- The session's user must be the Base Account itself for the two layers to line up. Whether the agent SDK accepts an EIP-712 authorization credential signed by a smart account (ERC-1271) has not been checked.
 - Frontend: no UI yet for approving the Spend Permission from a Base Account.
+- Counterfactual (not yet deployed) Base Accounts: their ERC-6492 signatures are not accepted for the VC; the account must be deployed first.
 - Only MockUSDC (the testnet margin token) is covered; nothing here touches mainnet.
