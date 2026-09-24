@@ -5,11 +5,12 @@
 export const agentMode = {
   title: 'Agent Mode',
   subtitle: 'AI agent 在鏈上做了什麼——全部直接從 Base Sepolia 讀，不需要連錢包。',
-  howTitle: '三步驟看懂',
+  howTitle: '四步驟看懂',
   how: [
     '使用者開一個有上限的 session，並簽一張 EIP-712 授權憑證（VC）給 agent。',
     'agent 用 x402 在 HTTP 層付 USDC 買訊號，錢直接進賣方地址。',
     'agent 只能在上限內下單；超額或撤銷之後，合約本身會拒絕。',
+    '使用 Base Account 時，Base Spend Permission 還會限制每天最多有多少保證金能離開錢包，超過就由 Coinbase 的合約拒絕（見下方紀錄）。',
   ],
   refresh: '重新讀取',
   loading: '讀取鏈上資料中…',

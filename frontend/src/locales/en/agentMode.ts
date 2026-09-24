@@ -6,11 +6,12 @@ import type { Catalog } from '../zh-TW';
 export const agentMode: Catalog['agentMode'] = {
   title: 'Agent Mode',
   subtitle: 'What the AI agent did on chain — read straight from Base Sepolia. No wallet needed.',
-  howTitle: 'How it works in three steps',
+  howTitle: 'How it works in four steps',
   how: [
     'The user opens a capped session and signs an EIP-712 authorization credential (VC) for the agent.',
     'The agent pays for signals in USDC over x402, at the HTTP layer; the money goes straight to the seller.',
     'The agent can only trade inside the caps. Over the cap, or after revocation, the contract itself says no.',
+    'With a Base Account, a Base Spend Permission also caps how much margin can leave the wallet each day; Coinbase's own contract refuses more. See the recorded run below.',
   ],
   refresh: 'Refresh',
   loading: 'Reading on-chain data…',
