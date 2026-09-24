@@ -15,6 +15,7 @@ export const agentMode = {
   loading: '讀取鏈上資料中…',
   scanWindow: '掃描範圍：最近 {window}',
   readError: '讀取失敗：{error}',
+  unreadable: '無法從鏈上讀取（見上方錯誤），請按重新整理。',
 
   payments: {
     title: 'x402 付費紀錄',

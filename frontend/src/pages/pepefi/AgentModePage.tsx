@@ -192,6 +192,10 @@ export default function AgentModePage() {
 
   useEffect(() => { void load() }, [load])
 
+  // One failed read leaves every later section empty; saying "No sessions yet" then would
+  // tell a judge the chain has nothing, when the page simply could not read it.
+  const emptyText = (empty: string) => (loading ? t.agentMode.loading : error ? t.agentMode.unreadable : empty)
+
   const now = Math.floor(Date.now() / 1000)
   // createSession is open to anyone, so "the newest active session" could be a stranger's
   // (for example one without an asset allow-list). The sandbox is the newest active session
@@ -296,7 +300,7 @@ export default function AgentModePage() {
               </Stack>
             </>
           ) : (
-            <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>{t.agentMode.tryIt.noSession}</Typography>
+            <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>{loading ? t.agentMode.loading : error ? t.agentMode.unreadable : t.agentMode.tryIt.noSession}</Typography>
           )}
         </Card>
 
@@ -305,7 +309,7 @@ export default function AgentModePage() {
           <Typography variant="h6" sx={{ fontWeight: 'bold' }}>{t.agentMode.sessions.title}</Typography>
           <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>{t.agentMode.sessions.caption}</Typography>
           {sessions.length === 0 ? (
-            <Typography variant="body2" color="text.secondary">{loading ? t.agentMode.loading : t.agentMode.sessions.empty}</Typography>
+            <Typography variant="body2" color="text.secondary">{emptyText(t.agentMode.sessions.empty)}</Typography>
           ) : (
             <TableContainer>
               <Table size="small">
@@ -351,7 +355,7 @@ export default function AgentModePage() {
             {interpolate(t.agentMode.payments.caption, { seller: seller ? shortAddr(seller) : '—' })}
           </Typography>
           {payments.length === 0 ? (
-            <Typography variant="body2" color="text.secondary">{loading ? t.agentMode.loading : t.agentMode.payments.empty}</Typography>
+            <Typography variant="body2" color="text.secondary">{emptyText(t.agentMode.payments.empty)}</Typography>
           ) : (
             <TableContainer>
               <Table size="small">
@@ -380,7 +384,7 @@ export default function AgentModePage() {
         <Card sx={{ p: 3 }}>
           <Typography variant="h6" sx={{ fontWeight: 'bold', mb: 2 }}>{t.agentMode.activity.title}</Typography>
           {activity.length === 0 ? (
-            <Typography variant="body2" color="text.secondary">{loading ? t.agentMode.loading : t.agentMode.activity.empty}</Typography>
+            <Typography variant="body2" color="text.secondary">{emptyText(t.agentMode.activity.empty)}</Typography>
           ) : (
             <Stack spacing={1}>
               {activity.map((a) => (

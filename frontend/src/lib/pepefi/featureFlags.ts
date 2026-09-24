@@ -40,4 +40,14 @@ export const FIXED_LEVERAGE = 1;
  */
 export const SHOW_PERPETUALS = readFlag(import.meta.env.VITE_SHOW_PERPETUALS, false);
 
+/**
+ * 頁首要不要露出通知鈴與聯絡人。
+ *
+ * 預設 **關**。兩者的資料都是 `src/_mock/_others.ts` 寫死的示範內容（好友邀請、
+ * 遊戲道具、虛構聯絡人與電話），還掛著「3 則未讀」的紅點。對第一次來的訪客或
+ * 評審，那看起來像真的社群活動，而它不是。另外手機寬度下頁首會因此多出約 80px
+ * 而橫向溢出。要展示原本的社群介面時設 `VITE_SHOW_DEMO_SOCIAL=1`。
+ */
+export const SHOW_DEMO_SOCIAL = readFlag(import.meta.env.VITE_SHOW_DEMO_SOCIAL, false);
+
 export const __test__ = { readFlag };
