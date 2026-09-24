@@ -8,7 +8,7 @@ const encoded = iface.encodeErrorResult('MarginExceedsCap', [130n, 100n])
 
 describe('classifySimulationFailure', () => {
   it('合約的自訂錯誤 → 合約拒絕，顯示解碼後的名稱與參數', () => {
-    expect(classifySimulationFailure({ data: encoded }, iface)).toEqual({
+    expect(classifySimulationFailure({ code: 'CALL_EXCEPTION', data: encoded }, iface)).toEqual({
       kind: 'rejected',
       reason: 'MarginExceedsCap(130, 100)',
     })
@@ -25,14 +25,24 @@ describe('classifySimulationFailure', () => {
     })
   })
 
-  it('沒有 revert data（RPC 或網路錯誤）→ 模擬失敗，不能說成合約拒絕', () => {
+  it('格式壞掉的 revert data 不會讓解碼例外往外拋', () => {
+    expect(classifySimulationFailure({ data: '0x12' }, iface)).toEqual({ kind: 'rejected', reason: '0x12' })
+  })
+
+  it('沒有 revert data 但 ethers 判定是 CALL_EXCEPTION → 仍是合約拒絕，只是沒有原因', () => {
+    // bare revert()，或 sepolia.base.org 只回 {"code":3,"message":"execution reverted"} 的情況
+    expect(classifySimulationFailure({ code: 'CALL_EXCEPTION', data: '0x', message: 'missing revert data' }, iface)).toEqual({
+      kind: 'rejected',
+      reason: null,
+    })
+    expect(classifySimulationFailure({ code: 'CALL_EXCEPTION', data: null }, iface).kind).toBe('rejected')
+  })
+
+  it('不是 CALL_EXCEPTION 的錯誤（RPC、網路）→ 模擬失敗，不能說成合約拒絕', () => {
     expect(classifySimulationFailure(new Error('could not detect network'), iface)).toEqual({
       kind: 'error',
       reason: 'could not detect network',
     })
-  })
-
-  it('空的 revert data（0x）視為沒有資料', () => {
-    expect(classifySimulationFailure({ data: '0x', message: 'missing revert data' }, iface).kind).toBe('error')
+    expect(classifySimulationFailure({ code: 'NETWORK_ERROR', message: 'fetch failed' }, iface).kind).toBe('error')
   })
 })

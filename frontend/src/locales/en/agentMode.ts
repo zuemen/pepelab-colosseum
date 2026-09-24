@@ -58,6 +58,7 @@ export const agentMode: Catalog['agentMode'] = {
     buttonAsset: 'Simulate off-list asset order',
     noSession: 'At least one session is needed to run this.',
     rejected: 'Rejected by the contract: {reason}',
+    noReason: 'no reason given',
     simulationFailed: 'Could not simulate this order (network or RPC error, not a contract rejection): {reason}',
     accepted: 'The contract did not reject it — this should not happen, please report it.',
   },

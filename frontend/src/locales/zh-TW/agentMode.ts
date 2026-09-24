@@ -57,6 +57,7 @@ export const agentMode = {
     buttonAsset: '模擬白名單外資產下單',
     noSession: '需要至少一個 session 才能測試。',
     rejected: '合約拒絕：{reason}',
+    noReason: '未提供原因',
     simulationFailed: '無法模擬這筆訂單（網路或 RPC 錯誤，不是合約拒絕）：{reason}',
     accepted: '合約沒有拒絕——這不應該發生，請回報。',
   },

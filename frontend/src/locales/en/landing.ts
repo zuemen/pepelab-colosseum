@@ -75,9 +75,9 @@ export const landing: Catalog['landing'] = {
     paperBefore: 'This platform uses ',
     paperBold1: 'testnet tokens',
     paperMid:
-      ' for simulated trading, letting users try RWA investing, social copy trading, and AI agent trading risk-free. ',
-    paperBold2: 'All prices track real markets',
+      ' for simulated trading, so users can try RWA investing, social copy trading and AI agent trading without real money. ',
+    paperBold2: 'Prices follow real-market quotes',
     paperAfter:
-      ", but the funds are simulated assets and no real money is involved — equivalent to TradingView's Paper Trading mode.",
+      " written by a keeper; the funds are simulated assets and no real money is involved, much like TradingView's Paper Trading mode.",
   },
 };

@@ -87,7 +87,7 @@ const EVENT_TOPICS = ['SessionOpenedPosition', 'SessionClosedPosition', 'Session
 
 interface Payment { tx: string; from: string; amount: string; block: number }
 interface SessionRow {
-  id: number; agent: string; perTrade: number; budget: number; spent: number
+  id: number; user: string; agent: string; perTrade: number; budget: number; spent: number
   maxLeverage: number; expiry: number; revoked: boolean
 }
 interface ActivityRow { tx: string; block: number; session: number; text: string }
@@ -149,11 +149,13 @@ export default function AgentModePage() {
 
       // Session caps
       const mgr = new ethers.Contract(managerAddr, AgentSessionManagerABI as ethers.InterfaceAbi, provider)
-      const n = Math.min(Number(await mgr.nextSessionId()), MAX_SESSIONS)
-      const rows = await mapLimit(Array.from({ length: n }, (_, i) => i), RPC_CONCURRENCY, async (id) => {
+      // The newest MAX_SESSIONS sessions (reading ids 0..49 would hide every session after the 50th).
+      const total = Number(await mgr.nextSessionId())
+      const first = Math.max(0, total - MAX_SESSIONS)
+      const rows = await mapLimit(Array.from({ length: total - first }, (_, i) => first + i), RPC_CONCURRENCY, async (id) => {
         const s = await mgr.sessions(id)
         return {
-          id, agent: s.agent as string,
+          id, user: s.user as string, agent: s.agent as string,
           perTrade: fmt18(s.maxMarginPerTrade), budget: fmt18(s.totalMarginBudget), spent: fmt18(s.spentMargin),
           maxLeverage: Number(s.maxLeverage), expiry: Number(s.expiry), revoked: Boolean(s.revoked),
         } satisfies SessionRow
@@ -191,7 +193,12 @@ export default function AgentModePage() {
   useEffect(() => { void load() }, [load])
 
   const now = Math.floor(Date.now() / 1000)
-  const sandbox = sessions.find((s) => statusOf(s, now) === 'active')
+  // createSession is open to anyone, so "the newest active session" could be a stranger's
+  // (for example one without an asset allow-list). The sandbox is the newest active session
+  // opened by the demo's own user.
+  const sandbox = sessions.find(
+    (s) => statusOf(s, now) === 'active' && s.user.toLowerCase() === (demoRun.user ?? '').toLowerCase(),
+  )
 
   /** Simulate an order from the session's own agent address. Nothing is signed or sent. */
   const tryOrder = useCallback(async (key: string, asset: string, margin: number) => {
@@ -210,7 +217,7 @@ export default function AgentModePage() {
         const outcome = classifySimulationFailure(e, iface)
         const template = outcome.kind === 'rejected' ? t.agentMode.tryIt.rejected : t.agentMode.tryIt.simulationFailed
         // AssetNotAllowed 的參數是 bytes32 資產 ID，換成評審看得懂的代號。
-        const reason = outcome.reason.replace(/0x[0-9a-fA-F]{64}/g, (h) => SYMBOL_BY_ASSET_ID[h.toLowerCase()] ?? h)
+        const reason = (outcome.reason ?? t.agentMode.tryIt.noReason).replace(/0x[0-9a-fA-F]{64}/g, (h) => SYMBOL_BY_ASSET_ID[h.toLowerCase()] ?? h)
         setTryResult((r) => ({ ...r, [key]: { kind: outcome.kind, text: interpolate(template, { reason }) } }))
       }
     } catch (e) {

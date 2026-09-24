@@ -10,6 +10,8 @@ export const SIGNAL_API_URL: string = (
   DEFAULT_SIGNAL_API_URL
 ).replace(/\/$/, '')
 
+const LOCAL_HOSTS = new Set(['localhost', '127.0.0.1', '0.0.0.0', '::1'])
+
 /**
  * 正式建置卻仍指向本機 = 這個部署沒有公開的 signal-api（例如 GitHub Pages 的評審版）。
  * 這時前端不該去連：訪客的電腦上沒有這個服務，一定失敗；新版 Chrome 還會對公開網頁
@@ -17,9 +19,10 @@ export const SIGNAL_API_URL: string = (
  */
 export function isPublicSignalApi(url: string, isDev: boolean): boolean {
   if (isDev) return true
+  if (url.startsWith('/')) return true // same-origin path, e.g. behind a reverse proxy
   try {
-    const host = new URL(url).hostname
-    return host !== 'localhost' && host !== '127.0.0.1'
+    const host = new URL(url).hostname.replace(/^\[|\]$/g, '')
+    return !LOCAL_HOSTS.has(host)
   } catch {
     return false
   }
