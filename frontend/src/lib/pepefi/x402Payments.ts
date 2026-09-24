@@ -24,11 +24,22 @@ const LOG_RPCS: readonly { url: string; chunk: number }[] = [
 
 export type LogFilter = { address: string; topics: (string | string[] | null)[] }
 
+/**
+ * A read-only provider whose requests give up after `timeoutMs`. ethers' default is five
+ * minutes, so a public RPC that hangs instead of failing would stall the page long before
+ * the next log RPC in LOG_RPCS got a chance.
+ */
+export function readProvider(url: string, chainId: number, timeoutMs = 15_000): ethers.JsonRpcProvider {
+  const req = new ethers.FetchRequest(url)
+  req.timeout = timeoutMs
+  return new ethers.JsonRpcProvider(req, chainId, { staticNetwork: true })
+}
+
 /** Scan [from, to] on the first log RPC that answers every chunk. */
 export async function scanLogs(filter: LogFilter, from: number, to: number, chainId: number): Promise<ethers.Log[]> {
   let lastError: unknown = null
   for (const rpc of LOG_RPCS) {
-    const p = new ethers.JsonRpcProvider(rpc.url, chainId, { staticNetwork: true })
+    const p = readProvider(rpc.url, chainId)
     try {
       const out: ethers.Log[] = []
       for (let a = from; a <= to; a += rpc.chunk) {
@@ -69,9 +80,9 @@ export function summarizePayments(payments: readonly Payment[]): { count: number
 export async function loadX402Payments(
   seller: string,
   chainId: number,
-  readProvider: ethers.JsonRpcProvider = new ethers.JsonRpcProvider(READ_RPC, chainId, { staticNetwork: true }),
+  provider: ethers.JsonRpcProvider = readProvider(READ_RPC, chainId),
 ): Promise<{ payments: Payment[]; fromBlock: number; toBlock: number }> {
-  const toBlock = await readProvider.getBlockNumber()
+  const toBlock = await provider.getBlockNumber()
   const fromBlock = deployBlock(chainId) ?? Math.max(0, toBlock - 50_000)
   const logs = seller
     ? await scanLogs({ address: CIRCLE_USDC, topics: [TRANSFER_TOPIC, null, ethers.zeroPadValue(seller, 32)] }, fromBlock, toBlock, chainId)

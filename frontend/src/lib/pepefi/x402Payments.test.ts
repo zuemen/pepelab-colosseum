@@ -40,3 +40,13 @@ describe('summarizePayments', () => {
     expect(summarizePayments(payments).feeUsd).toBe(0.01)
   })
 })
+
+describe('readProvider', () => {
+  it('每個請求都有逾時（不是 ethers 預設的 5 分鐘）', async () => {
+    const { readProvider } = await import('./x402Payments')
+    const p = readProvider('https://example.invalid', 84532, 1234)
+    // JsonRpcProvider keeps the FetchRequest it was built from; its timeout is what we set.
+    const req = (p as unknown as { _getConnection(): { timeout: number } })._getConnection()
+    expect(req.timeout).toBe(1234)
+  })
+})

@@ -31,7 +31,7 @@ import CircularProgress from '@mui/material/CircularProgress'
 import { t, interpolate } from 'src/locales'
 import { getAddresses, ASSET_IDS, PRIMARY_CHAIN_ID } from 'src/contracts/addresses'
 import { classifySimulationFailure } from 'src/lib/pepefi/simulationOutcome'
-import { CIRCLE_USDC, READ_RPC, TRANSFER_TOPIC, parsePaymentLog, scanLogs, type Payment } from 'src/lib/pepefi/x402Payments'
+import { CIRCLE_USDC, READ_RPC, TRANSFER_TOPIC, parsePaymentLog, readProvider, scanLogs, type Payment } from 'src/lib/pepefi/x402Payments'
 import { getSessionManagerAddress } from 'src/contracts/sessionManager'
 import AgentSessionManagerABI from 'src/contracts/abi/AgentSessionManager.json'
 import { deployBlock, describeScanWindow } from 'src/lib/pepefi/chainLogs'
@@ -72,7 +72,7 @@ function statusOf(s: SessionRow, now: number): 'active' | 'revoked' | 'expired' 
 // ----------------------------------------------------------------------
 
 export default function AgentModePage() {
-  const provider = useMemo(() => new ethers.JsonRpcProvider(READ_RPC, CHAIN_ID, { staticNetwork: true }), [])
+  const provider = useMemo(() => readProvider(READ_RPC, CHAIN_ID), [])
   const addrs = getAddresses(CHAIN_ID)
   const managerAddr = getSessionManagerAddress(CHAIN_ID)
   const seller = demoRun.seller ?? ''
