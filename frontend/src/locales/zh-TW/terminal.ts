@@ -236,6 +236,7 @@ export const terminal = {
    */
   candles: {
     unreachable: '無法連線到行情 API（{url}）。',
+    notHosted: 'K 線需要行情 API，這個公開版本沒有部署。',
     unreachableDev:
       '無法連線到行情 API（{url}）。請先啟動 signal-api：cd agent/signal-api && npx tsx src/index.ts',
     httpError: '行情 API 回 {status}（{url}）',

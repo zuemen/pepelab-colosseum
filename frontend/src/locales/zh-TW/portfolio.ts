@@ -73,6 +73,7 @@ export const portfolio = {
       chartPrice: '收盤價',
       itemUnavailable: '暫時無法取得',
       unreachable: '無法連線到指數 API（{url}）。',
+      notHosted: '指數對照需要行情 API，這個公開版本沒有部署。',
       unreachableDev:
         '無法連線到指數 API（{url}）。請先啟動 signal-api：cd agent/signal-api && npx tsx src/index.ts',
       httpError: '指數 API 回 {status}（{url}）',

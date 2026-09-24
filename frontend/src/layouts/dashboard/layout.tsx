@@ -21,6 +21,7 @@ import { useMode } from 'src/contexts/mode-context';
 // rest — into the production entry chunk. This layout is part of the app shell,
 // so that demo fixture data was being downloaded by every real visitor.
 import { _contacts, _notifications } from 'src/_mock/_others';
+import { SHOW_DEMO_SOCIAL } from 'src/lib/pepefi/featureFlags';
 import { useWalletContext } from 'src/contexts/wallet-context';
 
 import { Logo } from 'src/components/logo';
@@ -196,11 +197,9 @@ export function DashboardLayout({
 
 
 
-          {/** @slot Notifications popover */}
-          <NotificationsDrawer data={_notifications} />
-
-          {/** @slot Contacts popover */}
-          <ContactsPopover data={_contacts} />
+          {/** @slot Notifications and contacts: mock data only, so off unless SHOW_DEMO_SOCIAL */}
+          {SHOW_DEMO_SOCIAL && <NotificationsDrawer data={_notifications} />}
+          {SHOW_DEMO_SOCIAL && <ContactsPopover data={_contacts} />}
 
           {/** @slot Paper trading notice — always visible, hidden on xs for space */}
           <Box sx={{ display: { xs: 'none', md: 'block' } }}>

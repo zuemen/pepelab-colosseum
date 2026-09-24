@@ -3,6 +3,7 @@ import { useState, useEffect, useCallback } from 'react'
 import type { EventLog } from 'ethers'
 import { parseEther, formatEther, formatUnits } from 'ethers'
 import { useContracts } from 'src/hooks/useContracts'
+import { queryLogsChunked } from 'src/lib/pepefi/chainLogs'
 import { usePepefiWallet } from 'src/layouts/pepefi'
 import { explorerTx } from 'src/lib/pepefi/notify'
 import { t, interpolate } from 'src/locales'
@@ -125,15 +126,10 @@ export default function AdminTreasuryPage() {
       const current   = await wallet.provider.getBlockNumber()
       const fromBlock = Math.max(0, current - 10000)
 
+      // Chunked with a log-RPC fallback: sepolia.base.org caps eth_getLogs at 1,000 blocks.
       const [claimLogs, swapLogs] = await Promise.all([
-        contracts.feeRouter.queryFilter(
-          contracts.feeRouter.filters.PlatformFeesWithdrawn(wallet.address),
-          fromBlock, 'latest',
-        ),
-        contracts.swapRouter.queryFilter(
-          contracts.swapRouter.filters.SwapUsdcToEth(wallet.address),
-          fromBlock, 'latest',
-        ),
+        queryLogsChunked(contracts.feeRouter, contracts.feeRouter.filters.PlatformFeesWithdrawn(wallet.address), fromBlock, current),
+        queryLogsChunked(contracts.swapRouter, contracts.swapRouter.filters.SwapUsdcToEth(wallet.address), fromBlock, current),
       ])
 
       const records: CashOutRecord[] = []

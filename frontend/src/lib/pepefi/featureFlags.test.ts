@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 
-import { __test__, FIXED_LEVERAGE, SHOW_LEVERAGE, SHOW_PERPETUALS } from './featureFlags'
+import { __test__, FIXED_LEVERAGE, SHOW_LEVERAGE, SHOW_PERPETUALS, SHOW_DEMO_SOCIAL } from './featureFlags'
 
 const { readFlag } = __test__
 
@@ -38,5 +38,9 @@ describe('預設值', () => {
     // 會讓人以為這是炒幣平台。要改預設值必須是一個有意識的決定。
     expect(SHOW_LEVERAGE).toBe(false)
     expect(SHOW_PERPETUALS).toBe(false)
+  })
+
+  it('頁首的示範通知與聯絡人預設關閉 —— 那是寫死的假資料，不能讓訪客以為是真的', () => {
+    expect(SHOW_DEMO_SOCIAL).toBe(false)
   })
 })

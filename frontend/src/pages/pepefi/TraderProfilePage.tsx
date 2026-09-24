@@ -3,6 +3,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { useParams, Link as RouterLink } from 'react-router'
 import { useContracts } from 'src/hooks/useContracts'
 import { usePepefiWallet } from 'src/layouts/pepefi'
+import { queryLogsChunked } from 'src/lib/pepefi/chainLogs'
 import { TableSkeleton, CardSkeleton } from 'src/components/pepefi/Skeleton'
 import { useESG } from 'src/hooks/useESG'
 import ESGBadge from 'src/components/pepefi/ESGBadge'
@@ -178,7 +179,10 @@ export default function TraderProfilePage() {
       // slash history from Slashed events
       try {
         const filter = contracts.traderStake.filters['Slashed'](traderAddr, null)
-        const events = await contracts.traderStake.queryFilter(filter, -10000)
+        // Chunked: sepolia.base.org caps eth_getLogs at 1,000 blocks, and queryLogsChunked
+        // falls back to a log RPC without that cap (see chainLogs.ts).
+        const current = await wallet.provider!.getBlockNumber()
+        const events = await queryLogsChunked(contracts.traderStake, filter, Math.max(0, current - 10000), current)
         setSlashHistory(events.map((e: unknown) => {
           const ev = e as { args: { trader: string; amount: bigint; recipient: string }; transactionHash: string }
           return {

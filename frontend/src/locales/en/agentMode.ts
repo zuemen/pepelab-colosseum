@@ -16,6 +16,7 @@ export const agentMode: Catalog['agentMode'] = {
   loading: 'Reading on-chain data…',
   scanWindow: 'Scan window: last {window}',
   readError: 'Read failed: {error}',
+  unreadable: 'Could not be read from the chain (see the error above). Try Refresh.',
 
   payments: {
     title: 'x402 payments',
