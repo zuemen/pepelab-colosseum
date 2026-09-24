@@ -11,7 +11,7 @@ export const agentMode: Catalog['agentMode'] = {
     'The user opens a capped session and signs an EIP-712 authorization credential (VC) for the agent.',
     'The agent pays for signals in USDC over x402, at the HTTP layer; the money goes straight to the seller.',
     'The agent can only trade inside the caps. Over the cap, or after revocation, the contract itself says no.',
-    'With a Base Account, a Base Spend Permission also caps how much margin can leave the wallet each day; Coinbase's own contract refuses more. See the recorded run below.',
+    'With a Base Account, a Base Spend Permission also caps how much margin can leave the wallet each day; Coinbase’s own contract refuses more. See the recorded run below.',
   ],
   refresh: 'Refresh',
   loading: 'Reading on-chain data…',
