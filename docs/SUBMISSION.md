@@ -33,7 +33,7 @@ Agents drive all of it through an **MCP server** (`agent/mcp-server`: read tools
 
 ## 3. Proof: the replayable demo
 
-`agent/examples/e2e-demo.ts` runs the whole story with **three separate keys** (User, Agent, Seller): eight steps and ten on-chain transactions. Latest run: [`demo/RUN.md`](../demo/RUN.md). Every on-chain step links to BaseScan; step ② is an off-chain signature.
+`agent/examples/e2e-demo.ts` runs the whole story with **three separate keys** (User, Agent, Seller) in eight steps. The x402 payments are signed by the agent and submitted by the x402 facilitator. Latest run: [`demo/RUN.md`](../demo/RUN.md). Every on-chain step links to BaseScan; step ② is an off-chain signature.
 
 | # | Actor | Step | On chain |
 |---|---|---|---|
@@ -79,7 +79,7 @@ flowchart LR
 
 **Shipped (verifiable on Base Sepolia):**
 
-- Every contract is deployed on Base Sepolia. The exchange authorizes exactly one agent contract, the AgentSessionManager.
+- Every contract is deployed on Base Sepolia. The exchange lets two contracts act for a user: the AgentSessionManager (agents, within the session's limits) and the CopyTracker (copy trading, which each follower opts into). An agent's own key has no rights on the exchange.
 - x402 payments settle in **Circle's official Base Sepolia USDC** (`0x036CbD53…CF7e`, EIP-3009 `transferWithAuthorization`) through the x402 facilitator. Each payment is an on-chain USDC transfer from agent to seller.
 - Signal revenue is split on chain by a FeeRouter bound to that same USDC (`routeExternalRevenue`).
 - The price keeper runs on GitHub Actions against this deployment. Oracle adapters for Pyth and Chainlink on Base Sepolia are deployed (see limitations).
@@ -118,7 +118,7 @@ Judge sandbox: session **#3** (agent `0xd3c6a11e…0EB7`, 50 per trade, 150 budg
 
 ```bash
 # contracts
-cd contracts && forge test            # 776 tests
+cd contracts && forge test            # 773 tests in CI on 2026-09-24
 
 # agent: signal API, then the three-party demo
 cd agent && npm ci
@@ -139,7 +139,7 @@ Test keys need Base Sepolia ETH. The agent key also needs Circle test USDC from 
 | Revenue line | Mechanism | Already on chain? |
 |---|---|---|
 | Signal and data fees | Agents pay per call over x402. Strategy providers set a price and keep 70%; 20% platform; 10% insurance vault | Yes: `routeExternalRevenue` |
-| Trading fees | Perp trading and performance fees route through the FeeRouter's existing 70/20/10 split | Yes: FeeRouter |
+| Trading fees | A share of every perp trading fee funds the insurance vault; copy-trading performance fees are split 70/20/10 by the perp FeeRouter | Yes: exchange and FeeRouter |
 | Mandate infrastructure (B2B) | Agent builders and wallets license the session and VC layer to offer "bounded autonomy" on their own venue | Roadmap |
 
 **Who pays**
@@ -206,11 +206,11 @@ Sources: see §1 (read 2026-09-23). A dash means the source documents no such co
 | VC | Standing authorization without a nonce. Revocation is the on-chain `revokeSession` | Status list and nonce |
 | Liquidation | The remaining collateral goes to the liquidator and the vault, not back to the owner | Refund the remainder |
 
-Security history: [`docs/audit/AUDIT_2026-08-06.md`](audit/AUDIT_2026-08-06.md). This deployment uses fresh keys; a historical key visible in git history owns nothing here.
+Security history: [`docs/audit/AUDIT_2026-08-06.md`](audit/AUDIT_2026-08-06.md). Every session limit is covered by invariant fuzzing ([`contracts/test/AgentSessionInvariant.t.sol`](../contracts/test/AgentSessionInvariant.t.sol)); removing any one of the seven checks makes an invariant fail (checked 2026-09-24). This deployment uses fresh keys; a historical key visible in git history owns nothing here.
 
 ## 12. Development history and disclosure
 
-**This product was not started at the hackathon.** PepeLab began on 2026-05-05 as our NCCU Capstone 2026 project. The repository keeps its full git history: 624 commits before the contest opened (Sep 14, 2026, 06:00 PT) and 46 during it so far (as of Sep 24, 2026: 181 files changed, +9,616 / −6,455 lines). Colosseum judges only the work done during the contest, so this section separates the two. Every hash below is in this repository.
+**This product was not started at the hackathon.** PepeLab began on 2026-05-05 as our NCCU Capstone 2026 project. The repository keeps its full git history: 624 commits before the contest opened (Sep 14, 2026, 06:00 PT) and 52 during it so far (40 authored commits and 12 GitHub merge commits, as of Sep 24, 2026). Net change since the last pre-contest commit (`3118824`): 131 files, +6,231 / −4,978 lines, not counting generated deployment records under `contracts/broadcast`. Colosseum judges only the work done during the contest, so this section separates the two. Every hash below is in this repository.
 
 ### Prior work (before Sep 14, 2026)
 
@@ -218,7 +218,9 @@ Security history: [`docs/audit/AUDIT_2026-08-06.md`](audit/AUDIT_2026-08-06.md).
 |---|---|
 | `PerpetualExchange` (on-chain CFD/perpetuals engine), MockUSDC, oracle adapters | `307765e`, 2026-05-06 |
 | `FeeRouter` (fee routing; later the 70/20/10 x402 revenue split) | `907a6b6`, 2026-05-09 |
-| `AgentSessionManager` (per-trade cap, budget, max leverage, assets, expiry, revocation) | `f7a1308`, 2026-06-13 |
+| `AgentSessionManager` (per-trade cap, budget, max leverage, expiry, revocation) | `f7a1308`, 2026-06-13 |
+| Per-session asset allow-list | `d4d6d58`, 2026-07-27 |
+| Frontend: session UI, x402 developer docs page, landing KPI strip | `3bf29b2` (06-13), `ca9b80f` (06-15), `cbadf67` (06-16) |
 | Agent stack: x402 signal API, MCP server, demo agent, shared SDK | `5585f28`, 2026-06-13 |
 | EIP-712 agent-authorization credential (issue and verify) | `18ab803`, `a9c695d`, 2026-06-19 |
 | Telegram bot | `9eb6697`, 2026-06-21 |
@@ -248,7 +250,7 @@ The first week of the contest went to the retail app, before we committed to thi
 
 ## AI usage
 
-We build with an AI coding assistant (Claude Code). Commits it co-wrote carry a `Co-Authored-By: Claude` trailer: 35 of the 46 contest-period commits do.
+We build with an AI coding assistant (Claude Code). Commits it co-wrote carry a `Co-Authored-By: Claude` trailer. As of Sep 24, 2026, all 40 authored commits of the contest period carry it; the other 12 contest-period commits are GitHub merge commits.
 
 | The assistant | The team |
 |---|---|

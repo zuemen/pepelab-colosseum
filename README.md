@@ -7,7 +7,7 @@ Entered in the Colosseum Crypto World's Fair (Base track). PepeLab started befor
 ## See it in 3 minutes
 
 1. Open **https://zuemen.github.io/pepelab-colosseum/agent-mode**; no wallet is needed. It shows x402 payments, session caps and agent actions, read straight from Base Sepolia. The **Try it** button simulates the session's agent placing an over-cap or off-list order, and shows the contract's own revert.
-2. Or read [`demo/RUN.md`](demo/RUN.md): eight steps and ten on-chain transactions from three separate keys, each linked to BaseScan. Two of the transactions are orders **mined and reverted** by the contract: one over the cap, one after revocation.
+2. Or read [`demo/RUN.md`](demo/RUN.md): eight steps with keys held by three separate parties (user, agent, signal seller), each on-chain step linked to BaseScan. The x402 payments are signed by the agent and submitted by the x402 facilitator. Two of the transactions are orders **mined and reverted** by the contract: one over the cap, one after revocation.
 
 ## How it works
 
@@ -40,7 +40,7 @@ Source of truth: `frontend/src/contracts/addresses.ts`. This is this repository'
 
 Source code for all 16 contracts of this deployment (the table plus three oracle adapters and the x402 InsuranceVault) is verified on [Blockscout](https://base-sepolia.blockscout.com) and [Sourcify](https://sourcify.dev) as an exact match (creation and runtime bytecode), checked 2026-09-24. Click an address to read the code.
 
-The exchange authorizes exactly one agent contract: the AgentSessionManager above.
+The exchange lets two contracts act for a user: the AgentSessionManager above (agents, within the session's limits) and the CopyTracker (copy trading, which each follower opts into). An agent's own key has no rights on the exchange.
 
 ## Quick start
 
@@ -75,6 +75,8 @@ Test keys need Base Sepolia ETH. The agent key also needs Circle test USDC (fauc
 | `frontend/` | React 19 + Vite + MUI app; `/agent-mode` is the judge-facing page |
 
 ## Status and limitations
+
+Every limit in `AgentSessionManager` is covered by invariant fuzzing (`contracts/test/AgentSessionInvariant.t.sol`): a handler mixes valid orders with orders over the cap or budget, above the leverage cap, on an off-list asset, after revocation or expiry, and from a non-agent. Removing any one of the seven checks makes an invariant fail (checked 2026-09-24).
 
 This is a testnet prototype. Margin is MockUSDC. Prices come from a keeper-fed MockOracle; the keeper key can write any value. Pyth adapters are deployed, but the Pyth feed on Base Sepolia was stale when checked. The session budget is cumulative. The x402 payment and its 70/20/10 routing are two separate transactions. The full current-state and plan table is in [`docs/SUBMISSION.md`](docs/SUBMISSION.md#11-current-state-and-limitations).
 

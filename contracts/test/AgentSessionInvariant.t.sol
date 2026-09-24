@@ -253,7 +253,7 @@ contract AgentSessionInvariantTest is Test {
     /// Shows that the fuzzer actually reached each boundary; a run where a counter is
     /// zero exercised that limit only vacuously.
     function afterInvariant() public view {
-        console.log("calls open/stranger/revoke/warp/close:", handler.callsOpen(), handler.callsStranger(), handler.callsRevoke());
+        console.log("calls open/stranger/revoke:", handler.callsOpen(), handler.callsStranger(), handler.callsRevoke());
         console.log("  warp/close/expire:", handler.callsWarp(), handler.callsClose(), handler.callsExpire());
         console.log("successful opens:", handler.ghostOpens());
         console.log("reverts MarginExceedsPerTradeCap:", handler.reverts(AgentSessionManager.MarginExceedsPerTradeCap.selector));
