@@ -6,6 +6,9 @@
 |---|---|
 | [`SUBMISSION.md`](SUBMISSION.md) | The Colosseum submission: problem, product, proof, Base integration, business model, go-to-market, and the development history (section 12) |
 | [`../demo/RUN.md`](../demo/RUN.md) | The recorded end-to-end run on Base Sepolia, with a BaseScan link for every on-chain step |
+| [`../demo/SPEND_PERMISSIONS_RUN.md`](../demo/SPEND_PERMISSIONS_RUN.md) | A Base Account funds the agent through a Base Spend Permission on Base Sepolia, every transaction linked |
+| [`../demo/BASE_ACCOUNT_UI_E2E.md`](../demo/BASE_ACCOUNT_UI_E2E.md) | The in-app Base Account setup, driven in a browser against a Base Sepolia fork (20 checks, two scenarios) |
+| [`design/SPEND_PERMISSIONS.md`](design/SPEND_PERMISSIONS.md) | How Spend Permissions and agent sessions fit together; contract, agent and frontend; open items |
 | [`../HACKATHON.md`](../HACKATHON.md) | How this contest deployment was set up, isolated from the capstone deployment, and checked on chain |
 | [`MAINNET_EVALUATION.md`](MAINNET_EVALUATION.md) | What a mainnet deployment would need (evaluation only; nothing is deployed on mainnet) |
 

@@ -48,8 +48,17 @@ Both are in `contracts/script/DeploySpendPermissionFunder.s.sol` (checks the cha
 - MCP tool `top_up_margin` (`agent/mcp-server`), with the same required `authVcJson`.
 - The session's user must be the Base Account itself for the two layers to line up. The authorization VC can now be issued by a smart account: `verifyAuthorizationVCWithProvider` accepts ERC-1271 signatures from deployed accounts (on the main branch, commit `0035d44`).
 
+## Frontend
+
+- Sessions page, card **Fund the agent from a Base Account** (`frontend/src/components/pepefi/BaseAccountSetupCard.tsx`). It reads the connected account's code: a deployed Coinbase Smart Wallet (with or without SpendPermissionManager as an owner), a wallet that reports atomic batching for an account it has not deployed yet, or neither (an EOA such as MetaMask, or another contract, gets an explanation and no button).
+- One EIP-5792 `wallet_sendCalls` (2.0.0, `atomicRequired: true`, falling back to 1.0) with the calls from `frontend/src/lib/pepefi/baseAccountSetup.ts`: optional `addOwnerAddress(SpendPermissionManager)`, `approve`, `setTopUpAgent`, `createSessionWithAssets`. `baseAccountSetup.test.ts` pins them byte for byte to the on-chain batch `0x7f6939cd…`.
+- After `wallet_getCallsStatus` confirms, the card shows the Spend Permission JSON that `top_up_margin` takes, refreshes the session list (where the credential is signed; a Base Account returns an ERC-1271 signature) and reads the account again.
+- Browser test on a fork: [`demo/BASE_ACCOUNT_UI_E2E.md`](../../demo/BASE_ACCOUNT_UI_E2E.md).
+- Every agent entry point that takes a user's credential (MCP writes, the x402 examples' gate, demo-agent, Telegram bot, audit-verify) accepts ERC-1271 credentials; EOA credentials are still checked offline first.
+
 ## Open items
 
-- Frontend: no UI yet for approving the Spend Permission from a Base Account.
+- The in-app card has not been tried with a real Base Account popup, only with a mock wallet on a fork.
+- An account the wallet has not deployed yet: the card relies on the wallet deploying it with SpendPermissionManager as an owner; this path was not exercised.
 - Counterfactual (not yet deployed) Base Accounts: their ERC-6492 signatures are not accepted for the VC; the account must be deployed first.
 - Only MockUSDC (the testnet margin token) is covered; nothing here touches mainnet.

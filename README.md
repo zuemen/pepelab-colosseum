@@ -10,6 +10,7 @@ Entered in the Colosseum Crypto World's Fair (Base track). PepeLab started befor
 
 1. Open **https://zuemen.github.io/pepelab-colosseum/agent-mode**; no wallet is needed. It shows x402 payments, session caps and agent actions, read straight from Base Sepolia. The **Try it** button simulates the session's agent placing an over-cap or off-list order, and shows the contract's own revert.
 2. Or read [`demo/SPEND_PERMISSIONS_RUN.md`](demo/SPEND_PERMISSIONS_RUN.md): a **Base Account** (Coinbase Smart Wallet) funds the agent through a **Base Spend Permission** (at most 100 mUSDC per day), opens the session in one batch, and signs the agent's credential (ERC-1271); a top-up over the daily allowance is mined and reverted by Coinbase's SpendPermissionManager.
+   The same batch is one button on the app's **Sessions** page (EIP-5792 `wallet_sendCalls`); a browser test drives it on a Base Sepolia fork: [`demo/BASE_ACCOUNT_UI_E2E.md`](demo/BASE_ACCOUNT_UI_E2E.md).
 3. Or read [`demo/RUN.md`](demo/RUN.md): eight steps with keys held by three separate parties (user, agent, signal seller), each on-chain step linked to BaseScan. The x402 payments are signed by the agent and submitted by the x402 facilitator. Two of the transactions are orders **mined and reverted** by the contract: one over the cap, one after revocation.
 
 ## How it works
@@ -17,7 +18,8 @@ Entered in the Colosseum Crypto World's Fair (Base track). PepeLab started befor
 | Piece | Role |
 |---|---|
 | `AgentSessionManager` | User-created session per agent: `maxMarginPerTrade`, cumulative `totalMarginBudget`, `maxLeverage`, `expiry`, asset allow-list, `revokeSession`. Checked on chain on every agent order. An agent can close only the positions its own session opened. |
-| Authorization VC | W3C Verifiable Credential, signed with EIP-712 by the user (`did:pkh`). The agent SDK verifies it and cross-checks every cap against the on-chain session before sending. |
+| Authorization VC | W3C Verifiable Credential, signed with EIP-712 by the user (`did:pkh`), by an EOA or a Base Account (ERC-1271). The agent SDK verifies it and cross-checks every cap against the on-chain session before sending. |
+| Base Spend Permissions (`SpendPermissionMarginFunder`) | A Base Account lets the agent top up its margin through Coinbase's SpendPermissionManager, at most a set amount per day. Set up from the Sessions page in one batch. |
 | x402 signal API (`agent/signal-api`) | Pay-per-call endpoints in Circle USDC (EIP-3009). Signal fees can be routed on chain 70/20/10 (trader / platform / vault). |
 | MCP server (`agent/mcp-server`) | Read tools, plus `open_position` / `close_position` through the session, for Claude-style agents. |
 | `PerpetualExchange` | Perpetual CFDs: margin, OI-driven funding (8-hour interval, 0.75% cap), liquidation, insurance vault, ADL. |
