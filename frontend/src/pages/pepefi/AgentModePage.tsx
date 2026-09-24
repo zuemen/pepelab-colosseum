@@ -59,6 +59,11 @@ interface ActivityRow { tx: string; block: number; session: number; text: string
 interface TryResult { kind: 'rejected' | 'accepted' | 'error'; text: string }
 
 const fmt18 = (v: bigint) => Number(ethers.formatUnits(v, 18))
+// Written by agent/examples/spend-permission-demo.ts. Loaded through a glob so the build still
+// works before that run exists; the section only renders when the file is there.
+interface SpendPermissionRun { generatedAt: string; allowance: number; steps: { n: string; actor: string; action: string; tx: string | null; result: string }[] }
+const spendPermissionRun: SpendPermissionRun | null =
+  Object.values(import.meta.glob<{ default: SpendPermissionRun }>('../../lib/pepefi/spendPermissionRun.json', { eager: true }))[0]?.default ?? null
 const SYMBOL_BY_ASSET_ID: Record<string, string> = Object.fromEntries(
   Object.entries(ASSET_IDS).map(([sym, id]) => [id.toLowerCase(), sym]),
 )
@@ -70,6 +75,11 @@ function statusOf(s: SessionRow, now: number): 'active' | 'revoked' | 'expired' 
 }
 
 // ----------------------------------------------------------------------
+
+const cellMono = { fontFamily: MONO, fontSize: 13 }
+const txLink = (h: string) => (
+  <Link href={basescanTx(h)} target="_blank" rel="noopener" sx={cellMono}>{h.slice(0, 10)}…</Link>
+)
 
 export default function AgentModePage() {
   const provider = useMemo(() => readProvider(READ_RPC, CHAIN_ID), [])
@@ -188,11 +198,6 @@ export default function AgentModePage() {
       setTrying(null)
     }
   }, [sandbox, addrs, provider, managerAddr])
-
-  const cellMono = { fontFamily: MONO, fontSize: 13 }
-  const txLink = (h: string) => (
-    <Link href={basescanTx(h)} target="_blank" rel="noopener" sx={cellMono}>{h.slice(0, 10)}…</Link>
-  )
 
   return (
     <Container maxWidth="lg" sx={{ py: 4 }}>
@@ -362,37 +367,61 @@ export default function AgentModePage() {
           <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
             {interpolate(t.agentMode.recorded.caption, { at: demoRun.generatedAt.slice(0, 16).replace('T', ' ') + ' UTC' })}
           </Typography>
-          <TableContainer>
-            <Table size="small">
-              <TableHead>
-                <TableRow>
-                  <TableCell>{t.agentMode.recorded.colStep}</TableCell>
-                  <TableCell>{t.agentMode.recorded.colActor}</TableCell>
-                  <TableCell>{t.agentMode.recorded.colAction}</TableCell>
-                  <TableCell>{t.agentMode.recorded.colResult}</TableCell>
-                  <TableCell>{t.agentMode.recorded.colTx}</TableCell>
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {demoRun.steps.map((s) => {
-                  const rejected = s.result.startsWith('reverted')
-                  return (
-                    <TableRow key={s.n} sx={rejected ? { bgcolor: 'rgba(255,86,48,0.08)' } : undefined}>
-                      <TableCell sx={cellMono}>{s.n}</TableCell>
-                      <TableCell>{s.actor}</TableCell>
-                      <TableCell sx={{ fontSize: 13 }}>{s.action}</TableCell>
-                      <TableCell sx={{ fontSize: 13, color: rejected ? PEPE.short : undefined, fontWeight: rejected ? 'bold' : undefined }}>
-                        {s.result}
-                      </TableCell>
-                      <TableCell>{s.tx ? txLink(s.tx) : <Typography variant="caption" color="text.secondary">{t.agentMode.recorded.offChain}</Typography>}</TableCell>
-                    </TableRow>
-                  )
-                })}
-              </TableBody>
-            </Table>
-          </TableContainer>
+          <RecordedSteps steps={demoRun.steps} />
         </Card>
+
+        {/* Base Account + Spend Permission run (shown once spend-permission-demo.ts has written its JSON) */}
+        {spendPermissionRun && (
+          <Card sx={{ p: 3 }}>
+            <Typography variant="h6" sx={{ fontWeight: 'bold' }}>{t.agentMode.spendRun.title}</Typography>
+            <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+              {interpolate(t.agentMode.spendRun.caption, {
+                allowance: String(spendPermissionRun.allowance),
+                at: spendPermissionRun.generatedAt.slice(0, 16).replace('T', ' ') + ' UTC',
+              })}
+            </Typography>
+            <RecordedSteps steps={spendPermissionRun.steps} />
+          </Card>
+        )}
       </Stack>
     </Container>
   )
 }
+
+interface RecordedStep { n: string; actor: string; action: string; tx: string | null; result: string }
+
+/** One recorded run, step by step; reverted steps are highlighted. */
+function RecordedSteps({ steps }: { steps: readonly RecordedStep[] }) {
+  return (
+    <TableContainer>
+      <Table size="small">
+        <TableHead>
+          <TableRow>
+            <TableCell>{t.agentMode.recorded.colStep}</TableCell>
+            <TableCell>{t.agentMode.recorded.colActor}</TableCell>
+            <TableCell>{t.agentMode.recorded.colAction}</TableCell>
+            <TableCell>{t.agentMode.recorded.colResult}</TableCell>
+            <TableCell>{t.agentMode.recorded.colTx}</TableCell>
+          </TableRow>
+        </TableHead>
+        <TableBody>
+          {steps.map((s) => {
+            const rejected = s.result.startsWith('reverted')
+            return (
+              <TableRow key={s.n} sx={rejected ? { bgcolor: 'rgba(255,86,48,0.08)' } : undefined}>
+                <TableCell sx={cellMono}>{s.n}</TableCell>
+                <TableCell>{s.actor}</TableCell>
+                <TableCell sx={{ fontSize: 13 }}>{s.action}</TableCell>
+                <TableCell sx={{ fontSize: 13, color: rejected ? PEPE.short : undefined, fontWeight: rejected ? 'bold' : undefined }}>
+                  {s.result}
+                </TableCell>
+                <TableCell>{s.tx ? txLink(s.tx) : <Typography variant="caption" color="text.secondary">{t.agentMode.recorded.offChain}</Typography>}</TableCell>
+              </TableRow>
+            )
+          })}
+        </TableBody>
+      </Table>
+    </TableContainer>
+  )
+}
+

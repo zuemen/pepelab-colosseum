@@ -64,6 +64,12 @@ export const agentMode: Catalog['agentMode'] = {
     accepted: 'The contract did not reject it — this should not happen, please report it.',
   },
 
+  spendRun: {
+    title: 'Base Account + Spend Permission (recorded run)',
+    caption:
+      'A Base Account (Coinbase Smart Wallet) funds the agent through a Base Spend Permission: at most {allowance} mUSDC per day can leave the wallet, and only into its own margin. The session then bounds what the agent does with it. Latest run of agent/examples/spend-permission-demo.ts ({at}).',
+  },
+
   recorded: {
     title: 'Latest recorded demo run (including rejected transactions)',
     caption:

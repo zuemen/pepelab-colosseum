@@ -63,6 +63,12 @@ export const agentMode = {
     accepted: '合約沒有拒絕——這不應該發生，請回報。',
   },
 
+  spendRun: {
+    title: 'Base Account＋Spend Permission（錄好的示範）',
+    caption:
+      'Base Account（Coinbase 智慧錢包）透過 Base Spend Permission 替 agent 儲值：每天最多 {allowance} mUSDC 能離開錢包，而且只能進它自己的保證金；session 再限制 agent 怎麼用這些錢。agent/examples/spend-permission-demo.ts 最近一次執行（{at}）。',
+  },
+
   recorded: {
     title: '最近一次 demo 錄影（含被拒絕的交易）',
     caption:
