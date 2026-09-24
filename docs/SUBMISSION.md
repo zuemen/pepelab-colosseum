@@ -211,7 +211,7 @@ Security history: [`docs/audit/AUDIT_2026-08-06.md`](audit/AUDIT_2026-08-06.md).
 
 ## 12. Development history and disclosure
 
-**This product was not started at the hackathon.** PepeLab began on 2026-05-05 as our NCCU Capstone 2026 project. The repository keeps its full git history: 624 commits before the contest opened (Sep 14, 2026, 06:00 PT) and 52 during it so far (40 authored commits and 12 GitHub merge commits, as of Sep 24, 2026). Net change since the last pre-contest commit (`3118824`): 131 files, +6,231 / −4,978 lines, not counting generated deployment records under `contracts/broadcast`. Colosseum judges only the work done during the contest, so this section separates the two. Every hash below is in this repository.
+**This product was not started at the hackathon.** PepeLab began on 2026-05-05 as our NCCU Capstone 2026 project. The repository keeps its full git history: 624 commits before the contest opened (Sep 14, 2026, 06:00 PT) and 66 during it so far (53 authored commits and 13 GitHub merge commits, as of Sep 24, 2026). Net change since the last pre-contest commit (`3118824`): 161 files, +7,687 / −5,039 lines, not counting generated deployment records under `contracts/broadcast`. Colosseum judges only the work done during the contest, so this section separates the two. Every hash below is in this repository.
 
 ### Prior work (before Sep 14, 2026)
 
@@ -252,7 +252,7 @@ The first week of the contest went to the retail app, before we committed to thi
 
 ## AI usage
 
-We build with an AI coding assistant (Claude Code). Commits it co-wrote carry a `Co-Authored-By: Claude` trailer. As of Sep 24, 2026, all 40 authored commits of the contest period carry it; the other 12 contest-period commits are GitHub merge commits.
+We build with an AI coding assistant (Claude Code). Commits it co-wrote carry a `Co-Authored-By: Claude` trailer. As of Sep 24, 2026, all 53 authored commits of the contest period carry it; the other 13 contest-period commits are GitHub merge commits.
 
 | The assistant | The team |
 |---|---|
