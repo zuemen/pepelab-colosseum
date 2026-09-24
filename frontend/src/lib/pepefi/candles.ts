@@ -1,6 +1,6 @@
 import { t, interpolate } from 'src/locales'
 
-import { SIGNAL_API_URL } from './signalApi'
+import { SIGNAL_API_URL, isPublicSignalApi } from './signalApi'
 
 /**
  * K 線 API 的實際位址。
@@ -98,6 +98,11 @@ export async function fetchCandles(
   /** 只要早於這個 unix 秒數的蠟燭。往回翻頁時帶目前最舊那根的時間。 */
   end?: number,
 ): Promise<CandleResponse> {
+  // A public build without a hosted API would otherwise call localhost on the visitor's
+  // machine: it always fails, and browsers may prompt for local-network access.
+  if (!isPublicSignalApi(CANDLES_API_URL, import.meta.env.DEV)) {
+    throw new CandleFetchError(t.terminal.candles.notHosted)
+  }
   const url =
     `${CANDLES_API_URL}/candles/${encodeURIComponent(symbol)}?interval=${interval}&limit=${limit}` +
     (end ? `&end=${Math.floor(end)}` : '')

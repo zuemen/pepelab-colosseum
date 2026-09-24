@@ -231,6 +231,7 @@ export const terminal: Catalog['terminal'] = {
    */
   candles: {
     unreachable: "Can't reach the market-data API ({url}).",
+    notHosted: 'Price charts need the market-data API, which is not hosted in this public build.',
     unreachableDev:
       "Can't reach the market-data API ({url}). Start signal-api first: cd agent/signal-api && npx tsx src/index.ts",
     httpError: 'Market-data API returned {status} ({url})',

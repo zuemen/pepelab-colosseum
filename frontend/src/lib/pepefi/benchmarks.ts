@@ -1,6 +1,6 @@
 import { t, interpolate } from 'src/locales'
 
-import { SIGNAL_API_URL } from './signalApi'
+import { SIGNAL_API_URL, isPublicSignalApi } from './signalApi'
 
 // 對照指數（Benchmark，見 frontend/CONTEXT.md 的 Benchmark 詞條）API 的前端
 // client。後端在 agent/signal-api/src/benchmarks.ts，端點
@@ -70,6 +70,10 @@ export class BenchmarksFetchError extends Error {}
  * 已經包含在同一次回應裡,不需要再指定任何日期。
  */
 export async function fetchBenchmarks(date?: string, signal?: AbortSignal): Promise<BenchmarksResponse> {
+  // Same guard as fetchCandles: never call localhost from a public build.
+  if (!isPublicSignalApi(BENCHMARKS_API_URL, import.meta.env.DEV)) {
+    throw new BenchmarksFetchError(t.portfolio.allocation.benchmark.notHosted)
+  }
   const url = date
     ? `${BENCHMARKS_API_URL}/benchmarks?date=${encodeURIComponent(date)}`
     : `${BENCHMARKS_API_URL}/benchmarks`

@@ -61,6 +61,7 @@ export const portfolio: Catalog['portfolio'] = {
       chartPrice: 'Close',
       itemUnavailable: 'Currently unavailable',
       unreachable: "Can't reach the benchmarks API ({url}).",
+      notHosted: 'Benchmarks need the market-data API, which is not hosted in this public build.',
       unreachableDev:
         "Can't reach the benchmarks API ({url}). Start signal-api first: cd agent/signal-api && npx tsx src/index.ts",
       httpError: 'Benchmarks API returned {status} ({url})',
