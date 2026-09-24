@@ -18,6 +18,9 @@ import { usePepefiWallet } from 'src/layouts/pepefi'
 import { useContracts } from 'src/hooks/useContracts'
 import { useFundingData } from 'src/hooks/useFundingData'
 import { SIGNAL_API_URL, SIGNAL_API_AVAILABLE } from 'src/lib/pepefi/signalApi'
+import { loadX402Payments, summarizePayments } from 'src/lib/pepefi/x402Payments'
+import { PRIMARY_CHAIN_ID } from 'src/contracts/addresses'
+import demoRun from 'src/lib/pepefi/demoRun.json'
 
 import { Mono, LiveDot, PEPE, hexA } from './brandKit'
 
@@ -123,8 +126,22 @@ export default function HeroKpiStrip() {
   const [rev, setRev] = useState<RevenueTotals | null>(null)
 
   useEffect(() => {
-    // 沒有公開的 signal-api（例如 GitHub Pages 評審版）就不連，tile 改指向鏈上紀錄。
-    if (!SIGNAL_API_AVAILABLE) return undefined
+    // 沒有公開的 signal-api（例如 GitHub Pages 評審版）：改從鏈上讀一次付款紀錄
+    // （Circle USDC 轉給 signal seller 的 Transfer），總額與筆數跟 /revenue 同一個意思。
+    // 讀不到就維持 null，tile 顯示指向 Agent Mode 的連結。
+    if (!SIGNAL_API_AVAILABLE) {
+      let alive = true
+      loadX402Payments(demoRun.seller ?? '', PRIMARY_CHAIN_ID)
+        .then(({ payments }) => {
+          if (alive) setRev(summarizePayments(payments))
+        })
+        .catch(() => {
+          /* keep null → "on-chain log" link */
+        })
+      return () => {
+        alive = false
+      }
+    }
     let alive = true
     const pull = async () => {
       try {

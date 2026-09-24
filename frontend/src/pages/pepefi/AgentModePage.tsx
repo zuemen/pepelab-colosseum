@@ -31,6 +31,7 @@ import CircularProgress from '@mui/material/CircularProgress'
 import { t, interpolate } from 'src/locales'
 import { getAddresses, ASSET_IDS, PRIMARY_CHAIN_ID } from 'src/contracts/addresses'
 import { classifySimulationFailure } from 'src/lib/pepefi/simulationOutcome'
+import { CIRCLE_USDC, READ_RPC, TRANSFER_TOPIC, parsePaymentLog, scanLogs, type Payment } from 'src/lib/pepefi/x402Payments'
 import { getSessionManagerAddress } from 'src/contracts/sessionManager'
 import AgentSessionManagerABI from 'src/contracts/abi/AgentSessionManager.json'
 import { deployBlock, describeScanWindow } from 'src/lib/pepefi/chainLogs'
@@ -41,41 +42,6 @@ import demoRun from 'src/lib/pepefi/demoRun.json'
 // ----------------------------------------------------------------------
 
 const CHAIN_ID = PRIMARY_CHAIN_ID
-const READ_RPC = (import.meta.env.VITE_BASE_SEPOLIA_RPC_URL as string | undefined) ?? 'https://sepolia.base.org'
-const CIRCLE_USDC = '0x036CbD53842c5426634e7929541eC2318f3dCF7e'
-
-/**
- * Log RPCs, tried in order. sepolia.base.org caps eth_getLogs at 1,000 blocks
- * (measured 2026-09-23), so scanning from the deployment through a judging period
- * that runs into December would take thousands of calls. Tenderly's public gateway
- * answered a 3,000,000-block range in ~0.7 s with CORS open; publicnode caps at
- * 50,000 and is the fallback.
- */
-const LOG_RPCS: readonly { url: string; chunk: number }[] = [
-  { url: 'https://base-sepolia.gateway.tenderly.co', chunk: 1_000_000 },
-  { url: 'https://base-sepolia-rpc.publicnode.com', chunk: 50_000 },
-]
-
-type LogFilter = { address: string; topics: (string | string[] | null)[] }
-
-/** Scan [from, to] on the first log RPC that answers every chunk. */
-async function scanLogs(filter: LogFilter, from: number, to: number): Promise<ethers.Log[]> {
-  let lastError: unknown = null
-  for (const rpc of LOG_RPCS) {
-    const p = new ethers.JsonRpcProvider(rpc.url, CHAIN_ID, { staticNetwork: true })
-    try {
-      const out: ethers.Log[] = []
-      for (let a = from; a <= to; a += rpc.chunk) {
-        out.push(...(await p.getLogs({ ...filter, fromBlock: a, toBlock: Math.min(a + rpc.chunk - 1, to) })))
-      }
-      return out
-    } catch (e) {
-      lastError = e
-    }
-  }
-  throw lastError instanceof Error ? lastError : new Error('all log RPCs failed')
-}
-const TRANSFER_TOPIC = ethers.id('Transfer(address,address,uint256)')
 const MAX_SESSIONS = 50
 const basescanTx = (h: string) => `https://sepolia.basescan.org/tx/${h}`
 const basescanAddr = (a: string) => `https://sepolia.basescan.org/address/${a}`
@@ -85,7 +51,6 @@ const EVENT_TOPICS = ['SessionOpenedPosition', 'SessionClosedPosition', 'Session
   (n) => iface.getEvent(n)!.topicHash,
 )
 
-interface Payment { tx: string; from: string; amount: string; block: number }
 interface SessionRow {
   id: number; user: string; agent: string; perTrade: number; budget: number; spent: number
   maxLeverage: number; expiry: number; revoked: boolean
@@ -134,17 +99,10 @@ export default function AgentModePage() {
         ? await scanLogs({
             address: CIRCLE_USDC,
             topics: [TRANSFER_TOPIC, null, ethers.zeroPadValue(seller, 32)],
-          }, from, current)
+          }, from, current, CHAIN_ID)
         : []
       setPayments(
-        payLogs
-          .map((l) => ({
-            tx: l.transactionHash as string,
-            from: ethers.getAddress(ethers.dataSlice(l.topics[1], 12)),
-            amount: ethers.formatUnits(BigInt(l.data), 6),
-            block: Number(l.blockNumber),
-          }))
-          .sort((a, b) => b.block - a.block),
+        payLogs.map((l) => parsePaymentLog(l)).sort((a, b) => b.block - a.block),
       )
 
       // Session caps
@@ -163,7 +121,7 @@ export default function AgentModePage() {
       setSessions(rows.sort((a, b) => b.id - a.id))
 
       // Agent actions
-      const evLogs = await scanLogs({ address: managerAddr, topics: [EVENT_TOPICS] }, from, current)
+      const evLogs = await scanLogs({ address: managerAddr, topics: [EVENT_TOPICS] }, from, current, CHAIN_ID)
       setActivity(
         evLogs
           .map((l) => {
