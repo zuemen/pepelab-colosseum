@@ -15,7 +15,7 @@ import {
 import { ADDRESSES, assetIdOf } from "./addresses.ts";
 import { resolveSettlementToken } from "./env.ts";
 import {
-  verifyAuthorizationVC,
+  verifyAuthorizationVC, verifyAuthorizationVCWithProvider,
   type AuthorizationVC,
 } from "./identity.ts";
 import {
@@ -138,7 +138,10 @@ async function verifyVcAgainstChain(
   agentAddress: string,
   mgr: ethers.Contract,
 ): Promise<string | null> {
-  const res = verifyAuthorizationVC(vc);
+  // 簽發者可以是 EOA，也可以是智慧帳戶（例如 Base Account）：後者經 ERC-1271 由帳戶合約自己認可簽章。
+  // 無論哪一種，下面仍要求簽發者 == 鏈上 session.user。
+  const provider = (mgr.runner as ethers.Signer | null)?.provider;
+  const res = provider ? await verifyAuthorizationVCWithProvider(vc, provider) : verifyAuthorizationVC(vc);
   if (!res.valid) return `授權憑證(VC)驗證失敗：${res.reason}`;
   if (res.sessionId !== sessionId)
     return `VC sessionId(${res.sessionId}) 與請求(${sessionId}) 不符`;

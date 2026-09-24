@@ -134,62 +134,138 @@ export interface VerifyResult {
   caps?: AuthorizationCaps;
 }
 
+type Prepared =
+  | { error: string }
+  | {
+      issuer: string;
+      agent: string;
+      sessionId: number;
+      caps: AuthorizationCaps;
+      value: ReturnType<typeof buildAuthTypedValue>;
+      signature: string;
+    };
+
+/** Parse a VC and run every check that does not involve the signature. */
+function prepareAuthorizationVC(vc: AuthorizationVC): Prepared {
+  if (!vc?.proof?.proofValue) return { error: "missing proof" };
+
+  const issuerDid = parseDidPkh(vc.issuer);
+  const agentDidParsed = parseDidPkh(vc.credentialSubject.id);
+  const issuer = issuerDid.address;
+  const agent = agentDidParsed.address;
+  const caps = vc.credentialSubject.authorization;
+  const sessionId = vc.credentialSubject.sessionId;
+
+  // DID 的 chainId 必須綁定（稽核 四·Low）：EIP-712 簽的是「地址」，不是完整 DID，
+  // 所以把 `did:pkh:eip155:84532:0x…` 改成 `eip155:1:0x…` 以前照樣 valid:true，
+  // 而 vcId（proofValue 的摘要）也不變 —— 一張 Base Sepolia 的授權會被讀成
+  // 主網身分。這裡明確要求兩個 DID 都在本 VC schema 綁定的鏈上。
+  if (issuerDid.chainId !== AUTH_VC_CHAIN_ID) {
+    return { error: `issuer DID 的 chainId(${issuerDid.chainId}) 非本 VC schema 綁定的鏈(${AUTH_VC_CHAIN_ID})` };
+  }
+  if (agentDidParsed.chainId !== AUTH_VC_CHAIN_ID) {
+    return { error: `holder DID 的 chainId(${agentDidParsed.chainId}) 非本 VC schema 綁定的鏈(${AUTH_VC_CHAIN_ID})` };
+  }
+
+  // Reconstruct issuedAt from the proof's created timestamp (signed field).
+  const issuedAt = Math.floor(new Date(vc.proof.created).getTime() / 1000);
+  const value = buildAuthTypedValue({ issuer, agent, sessionId, caps, issuedAt });
+  return { issuer, agent, sessionId, caps, value, signature: vc.proof.proofValue };
+}
+
+/** EOA path: does the signature recover to the issuer? (false on malformed signatures) */
+function recoversToIssuer(p: Exclude<Prepared, { error: string }>): { ok: boolean; recovered?: string } {
+  try {
+    const recovered = ethers.verifyTypedData(DOMAIN, TYPES, p.value, p.signature);
+    return { ok: recovered !== ZERO && ethers.getAddress(recovered) === ethers.getAddress(p.issuer), recovered };
+  } catch {
+    return { ok: false };
+  }
+}
+
+function finish(p: Exclude<Prepared, { error: string }>): VerifyResult {
+  const { issuer, agent, sessionId, caps } = p;
+  // Expiry check (credential-level; the chain session also enforces its own).
+  if (caps.expiry * 1000 < Date.now()) {
+    return { valid: false, reason: "credential expired", issuer, agent, sessionId, caps };
+  }
+  return { valid: true, issuer, agent, sessionId, caps };
+}
+
 /**
  * Verify an authorization VC: recover the EIP-712 signer and require it to equal
  * the issuer named in the credential. Returns the authorized agent + caps so the
  * caller (verifier) can cross-check against the on-chain session.
  *
  * Any tampering (caps, agent, sessionId, issuer) changes the recovered address
- * → mismatch → `valid:false`.
+ * → mismatch → `valid:false`. EOA issuers only; smart-account issuers need
+ * `verifyAuthorizationVCWithProvider`.
  */
 export function verifyAuthorizationVC(vc: AuthorizationVC): VerifyResult {
   try {
-    if (!vc?.proof?.proofValue) return { valid: false, reason: "missing proof" };
+    const p = prepareAuthorizationVC(vc);
+    if ("error" in p) return { valid: false, reason: p.error };
 
-    const issuerDid = parseDidPkh(vc.issuer);
-    const agentDidParsed = parseDidPkh(vc.credentialSubject.id);
-    const issuer = issuerDid.address;
-    const agent = agentDidParsed.address;
-    const caps = vc.credentialSubject.authorization;
-    const sessionId = vc.credentialSubject.sessionId;
-
-    // DID 的 chainId 必須綁定（稽核 四·Low）：EIP-712 簽的是「地址」，不是完整 DID，
-    // 所以把 `did:pkh:eip155:84532:0x…` 改成 `eip155:1:0x…` 以前照樣 valid:true，
-    // 而 vcId（proofValue 的摘要）也不變 —— 一張 Base Sepolia 的授權會被讀成
-    // 主網身分。這裡明確要求兩個 DID 都在本 VC schema 綁定的鏈上。
-    if (issuerDid.chainId !== AUTH_VC_CHAIN_ID) {
+    const recovered = ethers.verifyTypedData(DOMAIN, TYPES, p.value, p.signature);
+    if (recovered === ZERO || ethers.getAddress(recovered) !== ethers.getAddress(p.issuer)) {
       return {
         valid: false,
-        reason: `issuer DID 的 chainId(${issuerDid.chainId}) 非本 VC schema 綁定的鏈(${AUTH_VC_CHAIN_ID})`,
+        reason: `signature does not match issuer (recovered ${recovered}, expected ${p.issuer})`,
       };
     }
-    if (agentDidParsed.chainId !== AUTH_VC_CHAIN_ID) {
-      return {
-        valid: false,
-        reason: `holder DID 的 chainId(${agentDidParsed.chainId}) 非本 VC schema 綁定的鏈(${AUTH_VC_CHAIN_ID})`,
-      };
-    }
-
-    // Reconstruct issuedAt from the proof's created timestamp (signed field).
-    const issuedAt = Math.floor(new Date(vc.proof.created).getTime() / 1000);
-
-    const value = buildAuthTypedValue({ issuer, agent, sessionId, caps, issuedAt });
-    const recovered = ethers.verifyTypedData(DOMAIN, TYPES, value, vc.proof.proofValue);
-
-    if (recovered === ZERO || ethers.getAddress(recovered) !== ethers.getAddress(issuer)) {
-      return {
-        valid: false,
-        reason: `signature does not match issuer (recovered ${recovered}, expected ${issuer})`,
-      };
-    }
-
-    // Expiry check (credential-level; the chain session also enforces its own).
-    if (caps.expiry * 1000 < Date.now()) {
-      return { valid: false, reason: "credential expired", issuer, agent, sessionId, caps };
-    }
-
-    return { valid: true, issuer, agent, sessionId, caps };
+    return finish(p);
   } catch (err) {
     return { valid: false, reason: (err as Error).message };
   }
+}
+
+/** What verifyAuthorizationVCWithProvider needs from a provider. */
+export type Erc1271Reader = {
+  getCode(address: string): Promise<string>;
+  call(tx: { to: string; data: string }): Promise<string>;
+};
+
+const ERC1271_MAGIC = "0x1626ba7e";
+const ERC1271 = new ethers.Interface(["function isValidSignature(bytes32 hash, bytes signature) view returns (bytes4)"]);
+
+/**
+ * Like `verifyAuthorizationVC`, and also accepts smart-account issuers such as a Base
+ * Account (Coinbase Smart Wallet). When the signature does not recover to the issuer and
+ * the issuer address holds code, the issuer itself is asked through ERC-1271
+ * `isValidSignature(EIP-712 digest, signature)`; only the magic value 0x1626ba7e counts.
+ *
+ * EOA issuers never touch the chain. Every non-signature check (DID chain binding,
+ * expiry) is identical. Counterfactual (not yet deployed) accounts and their ERC-6492
+ * wrapped signatures are not supported: the account must be deployed.
+ */
+export async function verifyAuthorizationVCWithProvider(vc: AuthorizationVC, provider: Erc1271Reader): Promise<VerifyResult> {
+  let p: Prepared;
+  try {
+    p = prepareAuthorizationVC(vc);
+  } catch (err) {
+    return { valid: false, reason: (err as Error).message };
+  }
+  if ("error" in p) return { valid: false, reason: p.error };
+
+  const eoa = recoversToIssuer(p);
+  if (eoa.ok) return finish(p);
+
+  try {
+    const code = await provider.getCode(p.issuer);
+    if (!code || code === "0x") {
+      return {
+        valid: false,
+        reason: `signature does not match issuer (recovered ${eoa.recovered ?? "nothing"}, expected ${p.issuer}), and the issuer is not a contract`,
+      };
+    }
+    const digest = ethers.TypedDataEncoder.hash(DOMAIN, TYPES, p.value);
+    const raw = await provider.call({ to: p.issuer, data: ERC1271.encodeFunctionData("isValidSignature", [digest, p.signature]) });
+    const [magic] = ERC1271.decodeFunctionResult("isValidSignature", raw);
+    if (String(magic).toLowerCase() !== ERC1271_MAGIC) {
+      return { valid: false, reason: `the issuer contract did not accept the signature (ERC-1271 returned ${magic})` };
+    }
+  } catch (err) {
+    return { valid: false, reason: `ERC-1271 check failed: ${(err as Error).message}` };
+  }
+  return finish(p);
 }
