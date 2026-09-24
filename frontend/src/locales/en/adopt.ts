@@ -10,6 +10,7 @@ export const adopt: Catalog['adopt'] = {
     'Browse the asset mixes Allocation Publishers share openly, and buy the same spot tokens at the same weights into your own wallet.',
 
   connectWallet: 'Connect a wallet to browse Allocations.',
+  noWalletAgentMode: 'No wallet? Agent Mode shows the live agent demo without one',
   notDeployed: 'Spot tokens are not enabled on this network yet, so Allocations cannot be adopted here.',
   notConnected: 'This connection cannot read on-chain data right now. Reconnect your wallet and try again.',
   mockWallet: 'The mock wallet cannot read on-chain data. Connect a real wallet to browse and adopt Allocations.',

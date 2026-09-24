@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { parseEther, type ContractTransactionResponse } from 'ethers';
+import { Link as RouterLink } from 'react-router';
 
 import Box from '@mui/material/Box';
 import Card from '@mui/material/Card';
@@ -129,9 +130,13 @@ export default function AllocationMarketplace() {
 
   if (!wallet.isConnected) {
     return (
-      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '60vh' }}>
+      <Stack spacing={1.5} alignItems="center" justifyContent="center" sx={{ minHeight: '60vh', px: 2, textAlign: 'center' }}>
         <Typography color="text.secondary">{t.adopt.connectWallet}</Typography>
-      </Box>
+        {/* Visitors without a wallet (e.g. judges) can still see the agent demo, read straight from chain. */}
+        <Link component={RouterLink} to="/agent-mode" underline="hover" variant="body2">
+          {t.adopt.noWalletAgentMode} →
+        </Link>
+      </Stack>
     );
   }
 

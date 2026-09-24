@@ -10,6 +10,7 @@ export const adopt = {
   subtitle: '瀏覽配置發布者公開的資產配置，照同樣的比例把現貨代幣買進你自己的錢包。',
 
   connectWallet: '連接錢包後即可瀏覽配置。',
+  noWalletAgentMode: '沒有錢包？Agent Mode 不用錢包就能看 agent 的實際示範',
   notDeployed: '這個網路還沒有啟用現貨代幣，暫時無法採用配置。',
   /** 已部署，但目前這個連線讀不到鏈上資料——跟 notDeployed 是兩種不同原因，不能共用同一句話。 */
   notConnected: '目前連線讀不到鏈上資料，請重新連接錢包後再試。',
