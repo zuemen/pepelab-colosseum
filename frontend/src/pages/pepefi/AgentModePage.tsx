@@ -11,6 +11,7 @@
 // agent/examples/e2e-demo.ts 最近一次執行寫出的 demoRun.json（每步附 BaseScan 連結）。
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { ethers } from 'ethers'
+import { Link as RouterLink } from 'react-router'
 import Box from '@mui/material/Box'
 import Card from '@mui/material/Card'
 import Chip from '@mui/material/Chip'
@@ -373,6 +374,10 @@ export default function AgentModePage() {
               })}
             </Typography>
             <RecordedSteps steps={spendPermissionRun.steps} />
+            <Typography variant="body2" color="text.secondary" sx={{ mt: 2 }}>
+              {t.agentMode.spendRun.inApp}{' '}
+              <Link component={RouterLink} to="/sessions">{t.agentMode.spendRun.inAppLink} →</Link>
+            </Typography>
           </Card>
         )}
 

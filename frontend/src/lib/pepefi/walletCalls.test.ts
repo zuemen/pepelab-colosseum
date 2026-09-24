@@ -1,6 +1,9 @@
+import { BrowserProvider } from 'ethers'
 import { describe, it, expect } from 'vitest'
 
-import { sendCallsParams, parseCallsStatus, isUnsupportedMethod, supportsAtomicBatch } from './walletCalls'
+import {
+  sendCallsParams, parseCallsStatus, isUnsupportedMethod, isUserRejection, isVersionMismatch, walletError, supportsAtomicBatch,
+} from './walletCalls'
 
 const FROM = '0x56D83fEe6cf6F0BFf345640C7527a1869677435F'
 const calls = [
@@ -63,9 +66,9 @@ describe('isUnsupportedMethod', () => {
 })
 
 describe('supportsAtomicBatch', () => {
-  it('2.0.0：atomic.status 為 supported 或 ready', () => {
+  it('2.0.0：只有 supported 算；ready（要先用 EIP-7702 升級帳戶）不算', () => {
     expect(supportsAtomicBatch({ '0x14a34': { atomic: { status: 'supported' } } }, 84532)).toBe(true)
-    expect(supportsAtomicBatch({ '0x14a34': { atomic: { status: 'ready' } } }, 84532)).toBe(true)
+    expect(supportsAtomicBatch({ '0x14a34': { atomic: { status: 'ready' } } }, 84532)).toBe(false)
     expect(supportsAtomicBatch({ '0x14a34': { atomic: { status: 'unsupported' } } }, 84532)).toBe(false)
   })
   it('1.0：atomicBatch.supported', () => {
@@ -74,5 +77,45 @@ describe('supportsAtomicBatch', () => {
   it('別條鏈或沒有回應 → false', () => {
     expect(supportsAtomicBatch({ '0x1': { atomic: { status: 'supported' } } }, 84532)).toBe(false)
     expect(supportsAtomicBatch(null, 84532)).toBe(false)
+  })
+})
+
+/** An EIP-1193 wallet on Base Sepolia whose wallet_sendCalls fails with `error`, seen through ethers like the card sees it. */
+async function sendCallsError(error: { code: number; message: string }): Promise<unknown> {
+  const provider = new BrowserProvider({
+    request: async ({ method }: { method: string }) => {
+      if (method === 'eth_chainId') return '0x14a34'
+      throw error
+    },
+  })
+  try {
+    await provider.send('wallet_sendCalls', sendCallsParams(calls, FROM, 84532))
+  } catch (e) {
+    return e
+  }
+  throw new Error('expected wallet_sendCalls to fail')
+}
+
+describe('錢包錯誤經過 ethers 包裝後（卡片實際拿到的形狀）', () => {
+  it('使用者拒絕（4001）：是拒絕，不是版本問題，不會再跳第二次錢包', async () => {
+    const e = await sendCallsError({ code: 4001, message: 'User rejected the request.' })
+    expect((e as Error).message).toMatch(/version=/) // ethers 的包裝訊息一定帶 version=，不能拿它比對
+    expect(isUserRejection(e)).toBe(true)
+    expect(isVersionMismatch(e)).toBe(false)
+    expect(isUnsupportedMethod(e)).toBe(false)
+  })
+  it('錢包不認得 2.0.0 → 版本問題（改用 1.0 重送）', async () => {
+    const e = await sendCallsError({ code: -32602, message: 'Unsupported wallet_sendCalls version: 2.0.0' })
+    expect(isVersionMismatch(e)).toBe(true)
+    expect(isUserRejection(e)).toBe(false)
+  })
+  it('錢包沒有這個方法 → 不支援', async () => {
+    expect(isUnsupportedMethod(await sendCallsError({ code: 4200, message: 'The requested method is not supported' }))).toBe(true)
+    expect(isUnsupportedMethod(await sendCallsError({ code: -32601, message: 'the method wallet_sendCalls does not exist/is not available' }))).toBe(true)
+  })
+  it('其他錯誤：三者皆否，walletError 取回錢包原本的訊息', async () => {
+    const e = await sendCallsError({ code: -32603, message: 'Internal error' })
+    expect([isUserRejection(e), isVersionMismatch(e), isUnsupportedMethod(e)]).toEqual([false, false, false])
+    expect(walletError(e)).toEqual({ code: -32603, message: 'Internal error' })
   })
 })

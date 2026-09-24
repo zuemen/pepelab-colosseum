@@ -19,7 +19,9 @@ import { MONO } from 'src/components/pepefi/brandKit'
 import { getSessionManagerAddress } from 'src/contracts/sessionManager'
 import { ASSET_IDS, getAddresses } from 'src/contracts/addresses'
 import { MAX_UINT48, SPEND_PERMISSION_MANAGER, buildSetupCalls, permissionJsonOf } from 'src/lib/pepefi/baseAccountSetup'
-import { isUnsupportedMethod, parseCallsStatus, sendCallsParams, supportsAtomicBatch } from 'src/lib/pepefi/walletCalls'
+import {
+  isUnsupportedMethod, isUserRejection, isVersionMismatch, parseCallsStatus, sendCallsParams, supportsAtomicBatch, walletError,
+} from 'src/lib/pepefi/walletCalls'
 
 const BASE_SEPOLIA = 84532
 const RECORDED_RUN = 'https://github.com/zuemen/pepelab-colosseum/blob/hackathon/colosseum-worldsfair/demo/SPEND_PERMISSIONS_RUN.md'
@@ -27,7 +29,7 @@ const WALLET = new ethers.Interface(['function isOwnerAddress(address account) v
 const ERC20 = new ethers.Interface(['function balanceOf(address) view returns (uint256)'])
 
 /** What the connected account can do. */
-type AccountKind = 'checking' | 'smart' | 'smartAddOwner' | 'undeployed' | 'notSmart' | 'notCoinbase'
+type AccountKind = 'checking' | 'smart' | 'smartAddOwner' | 'undeployed' | 'notSmart' | 'notCoinbase' | 'readFailed'
 
 interface Props {
   agent: string
@@ -62,7 +64,13 @@ export default function BaseAccountSetupCard({ agent, perTrade, budget, maxLever
     setKind('checking')
     ;(async () => {
       let next: AccountKind
-      const code = await provider.getCode(address)
+      let code: string
+      try {
+        code = await provider.getCode(address)
+      } catch {
+        if (alive) setKind('readFailed')
+        return
+      }
       if (code !== '0x') {
         try {
           const raw = await provider.call({ to: address, data: WALLET.encodeFunctionData('isOwnerAddress', [SPEND_PERMISSION_MANAGER]) })
@@ -109,6 +117,18 @@ export default function BaseAccountSetupCard({ agent, perTrade, budget, maxLever
     try {
       const latest = await provider.getBlock('latest')
       const now = latest?.timestamp ?? Math.floor(Date.now() / 1000)
+      const expiry = now + Math.round(parseFloat(hours) * 3600)
+      if (!(expiry > now + 60)) {
+        setResult({ severity: 'error', text: t.sessions.baseAccount.badHours })
+        return
+      }
+      // Read the owner list again right before sending: a batch that landed after an earlier
+      // timeout may already have added SpendPermissionManager, and adding it twice reverts.
+      let addSpmOwner = false
+      if ((await provider.getCode(address)) !== '0x') {
+        const raw = await provider.call({ to: address, data: WALLET.encodeFunctionData('isOwnerAddress', [SPEND_PERMISSION_MANAGER]) })
+        addSpmOwner = !WALLET.decodeFunctionResult('isOwnerAddress', raw)[0]
+      }
       const params = {
         account: address,
         agent,
@@ -122,9 +142,9 @@ export default function BaseAccountSetupCard({ agent, perTrade, budget, maxLever
         perTrade: parseUnits(perTrade || '0', 18),
         budget: parseUnits(budget || '0', 18),
         maxLeverage: Number(maxLeverage),
-        expiry: now + Math.round(parseFloat(hours) * 3600),
+        expiry,
         assets: [ASSET_IDS.sBTC, ASSET_IDS.sETH],
-        addSpmOwner: kind === 'smartAddOwner',
+        addSpmOwner,
       }
       const calls = buildSetupCalls(params)
 
@@ -133,36 +153,42 @@ export default function BaseAccountSetupCard({ agent, perTrade, budget, maxLever
         const res = await provider.send('wallet_sendCalls', sendCallsParams(calls, address, BASE_SEPOLIA))
         id = typeof res === 'string' ? res : (res as { id: string }).id
       } catch (e) {
+        if (isUserRejection(e)) throw e
         if (isUnsupportedMethod(e)) {
           setResult({ severity: 'error', text: t.sessions.baseAccount.unsupported })
           return
         }
-        if (!/version/i.test((e as Error).message ?? '')) throw e
+        if (!isVersionMismatch(e)) throw e
         // An older wallet that only speaks EIP-5792 1.0.
         const res = await provider.send('wallet_sendCalls', sendCallsParams(calls, address, BASE_SEPOLIA, '1.0'))
         id = typeof res === 'string' ? res : (res as { id: string }).id
       }
 
       for (let waited = 0; waited < 90_000; waited += 2_000) {
-        const status = parseCallsStatus(await provider.send('wallet_getCallsStatus', [id]))
+        const raw = await provider.send('wallet_getCallsStatus', [id])
+        const status = parseCallsStatus(raw)
         if (status.state === 'confirmed') {
           setPermission(JSON.stringify(permissionJsonOf(params), null, 2))
           setResult({ severity: 'success', text: t.sessions.baseAccount.done, txHash: status.txHash })
-          setRecheck((n) => n + 1)
           onDone()
           return
         }
         if (status.state === 'failed') {
-          setResult({ severity: 'error', text: interpolate(t.sessions.baseAccount.failed, { reason: 'reverted' }), txHash: status.txHash })
+          // With a receipt the batch reverted on chain; without one the wallet never got it on chain.
+          const reason = status.txHash ? 'reverted' : `wallet status ${String((raw as { status?: unknown })?.status)}`
+          setResult({ severity: 'error', text: interpolate(t.sessions.baseAccount.failed, { reason }), txHash: status.txHash })
           return
         }
         await new Promise((r) => setTimeout(r, 2_000))
       }
       setResult({ severity: 'info', text: t.sessions.baseAccount.timeout })
     } catch (e) {
-      setResult({ severity: 'error', text: interpolate(t.sessions.baseAccount.failed, { reason: (e as Error).message ?? String(e) }) })
+      if (isUserRejection(e)) setResult({ severity: 'info', text: t.sessions.baseAccount.rejected })
+      else setResult({ severity: 'error', text: interpolate(t.sessions.baseAccount.failed, { reason: walletError(e).message ?? String(e) }) })
     } finally {
       setBusy(false)
+      // Read the account again whatever happened (the batch may still land after a timeout).
+      setRecheck((n) => n + 1)
     }
   }
 
