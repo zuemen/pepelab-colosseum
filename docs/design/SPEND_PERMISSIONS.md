@@ -1,0 +1,47 @@
+# Base Spend Permissions for the cash leg (prototype, fork-tested, not deployed)
+
+Status: branch `feat/spend-permissions`, 2026-09-24. **Not merged, not deployed.** Tested only on a local fork of Base Sepolia.
+
+## Why
+
+A session in `AgentSessionManager` bounds what an agent does with margin that is already on the exchange: per-trade size, cumulative budget, leverage, assets, expiry. It says nothing about how much of the user's wallet can be committed over time. A Base Spend Permission is the reverse: it bounds how much of a token can leave a Base Account per period, and knows nothing about leverage or assets. Put together, they bound both the cash that can move and what can be done with it.
+
+## Design
+
+`contracts/src/SpendPermissionMarginFunder.sol`
+
+1. The user's Base Account approves a Spend Permission with `spender = SpendPermissionMarginFunder`, `token = margin token`, and an allowance per period, through Coinbase's `SpendPermissionManager` (`0xf85210B21cC50302F477BA56686d2019dC9b67Ad` on Base and Base Sepolia).
+2. The user names one top-up agent with `setTopUpAgent(agent)`, typically the agent of their session.
+3. The agent (or the user) calls `topUp(permission, amount)`. The funder calls `SpendPermissionManager.spend`, which enforces approval, start and end, and the per-period allowance, and moves the tokens from the Base Account to the funder. The funder immediately calls `exchange.depositMarginFor(account, amount)`.
+4. The margin is credited to the account holder, never to the caller. The funder keeps no balance.
+
+Checks in the funder itself: the caller must be the account or its top-up agent; the permission must name the funder as spender and the exchange's margin token as token.
+
+## Evidence
+
+`contracts/test/fork/SpendPermissionMarginFunder.fork.t.sol` runs against a fork of Base Sepolia with the real SpendPermissionManager, the real Coinbase Smart Wallet factory, and this repository's deployed exchange and MockUSDC. Run with `RUN_FORK_TESTS=true forge test --match-path test/fork/SpendPermissionMarginFunder.fork.t.sol -vv` (skipped otherwise, so CI does not depend on a public RPC).
+
+| Test | Shows |
+|---|---|
+| `test_agentTopsUpWithinAllowance` | Margin is credited to the account; the agent and the funder receive nothing |
+| `test_revertsAboveTheAllowanceInOnePeriod` | 60 then 50 in one period reverts with `ExceededSpendPermission` (allowance 100) |
+| `test_allowanceResetsNextPeriod` | The full allowance is available again in the next period |
+| `test_strangerCannotTopUp`, `test_removingTheAgentStopsItsTopUps` | Only the account or its current agent can trigger a top-up |
+| `test_accountCanTopUpItself` | The account can top up without an agent |
+| `test_revokedPermissionStopsTopUps` | Revoking the Spend Permission stops top-ups (`UnauthorizedSpendPermission`) |
+| `test_rejectsAPermissionForAnotherToken` | A permission for another token is refused before any transfer |
+
+8 of 8 pass (2026-09-24). Removing the caller check makes the two caller tests fail.
+
+## What a real deployment needs (owner decisions)
+
+1. Deploy `SpendPermissionMarginFunder(SpendPermissionManager, exchange, MockUSDC)` on Base Sepolia.
+2. The exchange owner calls `setAgentAuthorized(funder, true)`, because `depositMarginFor` only accepts authorized contracts.
+
+**Trust change to weigh first:** the exchange's `authorizedAgents` list also allows `openPositionFor` and `closePositionFor` for any user. The funder's code never calls them, and its source can be verified, but authorizing it still adds a third contract to the list the exchange trusts (after `AgentSessionManager` and `CopyTracker`). A narrower alternative is a dedicated deposit-only role on the exchange, which would need a new exchange deployment.
+
+## Open items
+
+- The session's user must be the Base Account itself for the two layers to line up. Whether the agent SDK accepts an EIP-712 authorization credential signed by a smart account (ERC-1271) has not been checked.
+- Frontend: no UI yet for approving the Spend Permission from a Base Account.
+- Only MockUSDC (the testnet margin token) is covered; nothing here touches mainnet.
