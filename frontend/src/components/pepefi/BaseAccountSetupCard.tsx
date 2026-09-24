@@ -47,6 +47,8 @@ export default function BaseAccountSetupCard({ agent, perTrade, budget, maxLever
   const [busy, setBusy] = useState(false)
   const [result, setResult] = useState<{ severity: 'success' | 'error' | 'info'; text: string; txHash?: string } | null>(null)
   const [permission, setPermission] = useState<string | null>(null)
+  // Bumped after a confirmed batch so the account status and balance are read again.
+  const [recheck, setRecheck] = useState(0)
 
   const onBaseSepolia = wallet.chainId === BASE_SEPOLIA
 
@@ -92,7 +94,7 @@ export default function BaseAccountSetupCard({ agent, perTrade, budget, maxLever
     return () => {
       alive = false
     }
-  }, [wallet.provider, wallet.address, onBaseSepolia])
+  }, [wallet.provider, wallet.address, onBaseSepolia, recheck])
 
   const usable = kind === 'smart' || kind === 'smartAddOwner' || kind === 'undeployed'
   const agentOk = isAddress(agent)
@@ -146,6 +148,7 @@ export default function BaseAccountSetupCard({ agent, perTrade, budget, maxLever
         if (status.state === 'confirmed') {
           setPermission(JSON.stringify(permissionJsonOf(params), null, 2))
           setResult({ severity: 'success', text: t.sessions.baseAccount.done, txHash: status.txHash })
+          setRecheck((n) => n + 1)
           onDone()
           return
         }
