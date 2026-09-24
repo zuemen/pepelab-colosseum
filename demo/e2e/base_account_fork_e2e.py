@@ -1,0 +1,381 @@
+"""E2E: the Sessions page's "Fund the agent from a Base Account" card, driven by Playwright against a
+local anvil fork of Base Sepolia. Nothing is sent to Base Sepolia.
+
+A mock EIP-1193 wallet is injected into the page (the page cannot tell it from a Base Account):
+  - eth_* are forwarded to the fork
+  - wallet_sendCalls      -> a throwaway owner key sends the smart wallet's executeBatch(calls) on the fork
+  - wallet_getCallsStatus -> the receipt, EIP-5792 2.0.0 shape
+  - eth_signTypedData_v4  -> the owner signs the wallet's replaySafeHash(digest), wrapped as
+                             SignatureWrapper(ownerIndex, sig): what a Coinbase Smart Wallet returns
+
+Scenarios:
+  existing  the Base Account from the recorded run (demo/SPEND_PERMISSIONS_RUN.md); SpendPermissionManager
+            is already an owner. The throwaway key is added as an owner on the fork (impersonating the
+            real owner there), so no real key is used.
+  fresh     a new Coinbase Smart Wallet whose only owner is the throwaway key: the page must add
+            SpendPermissionManager as an owner inside the same batch.
+
+After the page reports "Done", the script checks the fork state (session, top-up agent, SpendPermissionManager
+approval of the exact JSON the page shows), has the agent top up margin with that permission, signs the
+session's credential from the list, and verifies it with ERC-1271 and with the agent's own verifier.
+
+setup:  anvil --fork-url https://base-sepolia-rpc.publicnode.com --chain-id 84532 --block-time 1
+        pip install playwright eth-account && python -m playwright install chromium
+        (cd agent && npm ci)
+usage:  python demo/e2e/base_account_fork_e2e.py <existing|fresh> [site]
+"""
+import json
+import subprocess
+import re
+import secrets
+import sys
+import time
+import urllib.request
+from pathlib import Path
+
+from eth_abi import decode as abi_decode
+from eth_abi import encode as abi_encode
+from eth_account import Account
+from eth_account.messages import _hash_eip191_message, encode_typed_data
+from eth_utils import keccak, to_checksum_address
+from playwright.sync_api import sync_playwright
+
+RPC = 'http://127.0.0.1:8545'
+SCENARIO = sys.argv[1] if len(sys.argv) > 1 else 'existing'
+SITE = (sys.argv[2] if len(sys.argv) > 2 else 'https://zuemen.github.io/pepelab-colosseum').rstrip('/')
+OUT = Path(__file__).parent / 'out' / SCENARIO
+OUT.mkdir(parents=True, exist_ok=True)
+AGENT_DIR = Path(__file__).resolve().parents[2] / 'agent'
+
+SPM = '0xf85210B21cC50302F477BA56686d2019dC9b67Ad'
+FACTORY = '0x0BA5ED0c6AA8c49038F819E587E2633c4A9F428a'
+FUNDER = '0x20277169a755C690b98F0894EF57AF835469C9Af'
+ASM = '0x71125e25c903AD4e198e1863d5Bf26df97926CDe'
+USDC = '0x0910e965B06845BD3871860d522952a44a574058'
+EXCHANGE = '0xC45dEd77F4A30658e3c52E6fB4809E502e3D3B0E'
+AGENT = '0xd3c6a11ef5aF3D197Ecd0C9C44B15a23138d0EB7'
+EXISTING_ACCOUNT = '0x56D83fEe6cf6F0BFf345640C7527a1869677435F'
+EXISTING_OWNER = '0x2F188C934ffFa25D2af8354eb18fAE65038F5467'  # owner index 0 of EXISTING_ACCOUNT (impersonated on the fork only)
+CHAIN_ID = 84532
+PERMISSION_T = '(address,address,address,uint160,uint48,uint48,uint48,uint256,bytes)'
+
+checks: list[tuple[str, bool, str]] = []
+
+
+def check(name: str, ok: bool, detail: str = '') -> None:
+    checks.append((name, ok, detail))
+    print(('PASS ' if ok else 'FAIL ') + name + (f' — {detail}' if detail else ''), flush=True)
+
+
+# ── JSON-RPC to anvil ──────────────────────────────────────────────────────────
+_id = 0
+
+
+def rpc_raw(method: str, params: list) -> dict:
+    global _id
+    _id += 1
+    body = json.dumps({'jsonrpc': '2.0', 'id': _id, 'method': method, 'params': params}).encode()
+    req = urllib.request.Request(RPC, body, {'content-type': 'application/json'})
+    with urllib.request.urlopen(req, timeout=60) as r:
+        return json.loads(r.read())
+
+
+def rpc(method: str, params: list):
+    res = rpc_raw(method, params)
+    if 'error' in res:
+        raise RuntimeError(f'{method}: {res["error"]}')
+    return res['result']
+
+
+def sel(sig: str) -> bytes:
+    return keccak(text=sig)[:4]
+
+
+def calldata(sig: str, types: list[str], args: list) -> str:
+    return '0x' + (sel(sig) + abi_encode(types, args)).hex()
+
+
+def eth_call(to: str, data: str) -> bytes:
+    return bytes.fromhex(rpc('eth_call', [{'to': to, 'data': data}, 'latest'])[2:])
+
+
+def wait_receipt(h: str, timeout: float = 60) -> dict:
+    end = time.time() + timeout
+    while time.time() < end:
+        r = rpc('eth_getTransactionReceipt', [h])
+        if r:
+            return r
+        time.sleep(0.5)
+    raise TimeoutError(h)
+
+
+def send_as(frm: str, to: str, data: str) -> dict:
+    """Send a tx on the fork as `frm` without its key (anvil impersonation)."""
+    rpc('anvil_impersonateAccount', [frm])
+    rpc('anvil_setBalance', [frm, hex(10**18)])
+    try:
+        h = rpc('eth_sendTransaction', [{'from': frm, 'to': to, 'data': data}])
+    finally:
+        rpc('anvil_stopImpersonatingAccount', [frm])
+    r = wait_receipt(h)
+    if int(r['status'], 16) != 1:
+        raise RuntimeError(f'setup tx reverted: {h}')
+    return r
+
+
+# ── the mock wallet's key and account ───────────────────────────────────────────
+owner = Account.create()
+rpc('anvil_setBalance', [owner.address, hex(10**18)])
+wallet_state = {'account': None, 'owner_index': None}
+
+
+def setup_account() -> None:
+    if SCENARIO == 'existing':
+        account = EXISTING_ACCOUNT
+        idx = abi_decode(['uint256'], eth_call(account, calldata('nextOwnerIndex()', [], [])))[0]
+        # The existing owner adds the throwaway key as an owner (fork only).
+        send_as(EXISTING_OWNER, account, calldata('addOwnerAddress(address)', ['address'], [owner.address]))
+    else:
+        # A new Coinbase Smart Wallet whose only owner is the throwaway key: SpendPermissionManager is
+        # not an owner yet, so the page must add it inside the batch.
+        owners = [abi_encode(['address'], [owner.address])]
+        nonce = int.from_bytes(secrets.token_bytes(8), 'big')
+        account = to_checksum_address(abi_decode(['address'], eth_call(FACTORY, calldata('getAddress(bytes[],uint256)', ['bytes[]', 'uint256'], [owners, nonce])))[0])
+        send_as(owner.address, FACTORY, calldata('createAccount(bytes[],uint256)', ['bytes[]', 'uint256'], [owners, nonce]))
+        idx = 0
+    ok = abi_decode(['bool'], eth_call(account, calldata('isOwnerAddress(address)', ['address'], [owner.address])))[0]
+    check('fork setup: throwaway key is an owner of the account', ok, account)
+    spm_owner = abi_decode(['bool'], eth_call(account, calldata('isOwnerAddress(address)', ['address'], [SPM])))[0]
+    check('fork setup: SpendPermissionManager owner state matches scenario', spm_owner == (SCENARIO == 'existing'), f'isOwner(SPM)={spm_owner}')
+    wallet_state['account'] = account
+    wallet_state['owner_index'] = idx
+
+
+def send_batch(calls: list[dict]) -> str:
+    account = wallet_state['account']
+    batch = [(to_checksum_address(c['to']), int(c.get('value', '0x0'), 16), bytes.fromhex(c['data'][2:])) for c in calls]
+    data = calldata('executeBatch((address,uint256,bytes)[])', ['(address,uint256,bytes)[]'], [batch])
+    tx = {'from': owner.address, 'to': account, 'data': data, 'value': '0x0'}
+    gas = int(rpc('eth_estimateGas', [tx]), 16)
+    block = rpc('eth_getBlockByNumber', ['latest', False])
+    base = int(block['baseFeePerGas'], 16)
+    signed = owner.sign_transaction({
+        'chainId': CHAIN_ID, 'nonce': int(rpc('eth_getTransactionCount', [owner.address, 'pending']), 16),
+        'to': account, 'data': data, 'value': 0, 'gas': gas * 2,
+        'maxFeePerGas': base * 2 + 10**6, 'maxPriorityFeePerGas': 10**6, 'type': 2,
+    })
+    return rpc('eth_sendRawTransaction', ['0x' + signed.raw_transaction.hex().removeprefix('0x')])
+
+
+def sign_typed(typed_json: str) -> str:
+    typed = json.loads(typed_json)
+    digest = _hash_eip191_message(encode_typed_data(full_message=typed))
+    safe = eth_call(wallet_state['account'], calldata('replaySafeHash(bytes32)', ['bytes32'], [digest]))
+    sig = owner.unsafe_sign_hash(safe)
+    raw = sig.r.to_bytes(32, 'big') + sig.s.to_bytes(32, 'big') + bytes([sig.v])
+    wrapped = abi_encode(['(uint256,bytes)'], [(wallet_state['owner_index'], raw)])
+    wallet_state['last_typed'] = typed
+    wallet_state['last_digest'] = '0x' + digest.hex()
+    return '0x' + wrapped.hex()
+
+
+rpc_log: list[str] = []
+
+
+def handle(method: str, params_json: str) -> str:
+    params = json.loads(params_json) if params_json else []
+    rpc_log.append(method)
+    try:
+        account = wallet_state['account']
+        if method in ('eth_requestAccounts', 'eth_accounts'):
+            return json.dumps({'result': [account]})
+        if method == 'eth_chainId':
+            return json.dumps({'result': hex(CHAIN_ID)})
+        if method == 'net_version':
+            return json.dumps({'result': str(CHAIN_ID)})
+        if method == 'wallet_getCapabilities':
+            return json.dumps({'result': {hex(CHAIN_ID): {'atomic': {'status': 'supported'}}}})
+        if method == 'wallet_sendCalls':
+            req = params[0]
+            wallet_state['send_request'] = req
+            h = send_batch(req['calls'])
+            return json.dumps({'result': {'id': h}})
+        if method == 'wallet_getCallsStatus':
+            h = params[0]
+            r = rpc('eth_getTransactionReceipt', [h])
+            if not r:
+                return json.dumps({'result': {'version': '2.0.0', 'id': h, 'chainId': hex(CHAIN_ID), 'status': 100, 'atomic': True}})
+            ok = int(r['status'], 16) == 1
+            return json.dumps({'result': {'version': '2.0.0', 'id': h, 'chainId': hex(CHAIN_ID), 'status': 200 if ok else 500, 'atomic': True,
+                                          'receipts': [{'status': r['status'], 'transactionHash': r['transactionHash'], 'blockHash': r['blockHash'],
+                                                        'blockNumber': r['blockNumber'], 'gasUsed': r['gasUsed'], 'logs': []}]}})
+        if method in ('eth_signTypedData_v4', 'eth_signTypedData'):
+            return json.dumps({'result': sign_typed(params[1])})
+        if method in ('wallet_switchEthereumChain', 'wallet_addEthereumChain'):
+            return json.dumps({'result': None})
+        res = rpc_raw(method, params)
+        return json.dumps({'error': res['error']} if 'error' in res else {'result': res['result']})
+    except Exception as e:  # surfaced to the page as an EIP-1193 error
+        return json.dumps({'error': {'code': -32603, 'message': f'mock wallet: {e}'}})
+
+
+INIT = """
+(() => {
+  const listeners = {};
+  window.ethereum = {
+    isMetaMask: false,
+    request: async ({ method, params }) => {
+      const out = JSON.parse(await window.__pepeRpc(method, JSON.stringify(params ?? [])));
+      if (out.error) { const e = new Error(out.error.message); e.code = out.error.code; e.data = out.error.data; throw e; }
+      return out.result;
+    },
+    on: (ev, fn) => { (listeners[ev] ||= []).push(fn); },
+    removeListener: (ev, fn) => { listeners[ev] = (listeners[ev] || []).filter(f => f !== fn); },
+  };
+})();
+"""
+
+
+def main() -> int:
+    setup_account()
+    account = wallet_state['account']
+    before_next = abi_decode(['uint256'], eth_call(ASM, calldata('nextSessionId()', [], [])))[0]
+
+    console_errors: list[str] = []
+    with sync_playwright() as p:
+        browser = p.chromium.launch(headless=True)
+        ctx = browser.new_context(viewport={'width': 1366, 'height': 900})
+        ctx.expose_function('__pepeRpc', handle)
+        ctx.add_init_script(INIT)
+        page = ctx.new_page()
+        page.on('console', lambda m: console_errors.append(m.text) if m.type == 'error' else None)
+        not_found: list[str] = []
+        page.on('response', lambda r: not_found.append(r.url) if r.status >= 400 else None)
+        page.goto(f'{SITE}/sessions', wait_until='domcontentloaded', timeout=60_000)
+        # The header re-renders while route chunks load, so the button can detach mid-click: retry.
+        for attempt in range(4):
+            try:
+                page.locator('button:visible', has_text='Connect Wallet').first.click(timeout=15_000)
+                page.get_by_text('Connect with MetaMask').click(timeout=10_000)
+                break
+            except Exception:
+                if attempt == 3:
+                    raise
+                page.wait_for_timeout(1_000)
+        page.get_by_text(account[:6], exact=False).first.wait_for(timeout=30_000)
+        # Connecting lands on Portfolio; go to Agent Sessions through the sidebar (keeps the in-memory connection).
+        page.get_by_role('link', name='Agent Sessions').first.click(timeout=15_000)
+
+        card = page.locator('.MuiCard-root', has_text='Fund the agent from a Base Account').first
+        try:
+            card.wait_for(timeout=30_000)
+        except Exception:
+            page.screenshot(path=str(OUT / '0_no_card.png'), full_page=True)
+            print('rpc methods so far:', sorted(set(rpc_log)), 'console errors:', console_errors[:5])
+            raise
+        status = card.locator('.MuiAlert-root').first
+        page.wait_for_function("el => !/Checking/i.test(el.textContent)", arg=status.element_handle(), timeout=30_000)
+        status_text = status.inner_text()
+        expected = ('Coinbase Smart Wallet detected. The batch also adds SpendPermissionManager' if SCENARIO == 'fresh'
+                    else 'Coinbase Smart Wallet detected.')
+        check('card recognises the account', status_text.strip().startswith(expected) and (SCENARIO == 'fresh' or 'also adds' not in status_text), status_text[:140])
+        page.screenshot(path=str(OUT / '1_connected.png'), full_page=True)
+
+        page.get_by_placeholder('0x… or click Generate agent key on the right').fill(AGENT)
+        cta = card.get_by_role('button', name='Set up with one Base Account batch')
+        check('CTA enabled once the agent is filled', cta.is_enabled(), cta.inner_text())
+        cta.click()
+        done = card.locator('.MuiAlert-root', has_text='Done')
+        page.wait_for_function(
+            "c => /Done:|The batch failed|not confirmed after/.test(c.textContent)", arg=card.element_handle(), timeout=120_000)
+        ok_done = done.count() > 0
+        check('batch confirmed in the UI (Done alert)', ok_done, (done.first.inner_text() if ok_done else card.inner_text())[:300])
+        page.screenshot(path=str(OUT / '2_done.png'), full_page=True)
+        if not ok_done:
+            browser.close()
+            return 1
+
+        # The card reads the account again after a confirmed batch (SpendPermissionManager is an owner now).
+        after = ''
+        for _ in range(40):
+            after = status.inner_text().strip()
+            if after == 'Coinbase Smart Wallet detected.':
+                break
+            page.wait_for_timeout(500)
+        check('card re-reads the account after the batch', after == 'Coinbase Smart Wallet detected.', after[:120])
+        permission = json.loads(card.locator('pre').inner_text())
+        card.scroll_into_view_if_needed()
+        card.screenshot(path=str(OUT / 'card_done.png'))
+        (OUT / 'permission.json').write_text(json.dumps(permission, indent=2))
+        req = wallet_state['send_request']
+        check('wallet_sendCalls used EIP-5792 2.0.0 with atomicRequired', req.get('version') == '2.0.0' and req.get('atomicRequired') is True, f"{len(req['calls'])} calls")
+        check('batch length matches scenario', len(req['calls']) == (4 if SCENARIO == 'fresh' else 3), str([c['to'] for c in req['calls']]))
+
+        # ── on-fork state after the batch ──
+        after_next = abi_decode(['uint256'], eth_call(ASM, calldata('nextSessionId()', [], [])))[0]
+        sid = after_next - 1
+        check('exactly one session opened', after_next == before_next + 1, f'nextSessionId {before_next} → {after_next}')
+        s = abi_decode(['address', 'address', 'uint256', 'uint256', 'uint256', 'uint256', 'uint256', 'bool'],
+                       eth_call(ASM, calldata('sessions(uint256)', ['uint256'], [sid])))
+        check('session.user == the Base Account', to_checksum_address(s[0]) == account, f'#{sid} user {s[0]}')
+        check('session.agent == the agent', to_checksum_address(s[1]) == AGENT, s[1])
+        top_agent = abi_decode(['address'], eth_call(FUNDER, calldata('topUpAgent(address)', ['address'], [account])))[0]
+        check('funder.topUpAgent(account) == agent', to_checksum_address(top_agent) == AGENT, top_agent)
+        perm_tuple = (to_checksum_address(permission['account']), to_checksum_address(permission['spender']), to_checksum_address(permission['token']),
+                      int(permission['allowance']), permission['period'], permission['start'], permission['end'], int(permission['salt']), b'')
+        approved = abi_decode(['bool'], eth_call(SPM, calldata(f'isApproved({PERMISSION_T})', [PERMISSION_T], [perm_tuple])))[0]
+        check('SPM.isApproved(the JSON the page shows) == true', approved, f"allowance {int(permission['allowance']) / 1e18} mUSDC / {permission['period']}s")
+        spm_owner = abi_decode(['bool'], eth_call(account, calldata('isOwnerAddress(address)', ['address'], [SPM])))[0]
+        check('SpendPermissionManager is an owner after the batch', spm_owner)
+
+        # ── the agent tops up margin with that permission (what top_up_margin does) ──
+        amount = 5 * 10**18
+        bal = abi_decode(['uint256'], eth_call(USDC, calldata('balanceOf(address)', ['address'], [account])))[0]
+        if bal < amount:
+            send_as(owner.address, USDC, calldata('faucet()', [], []))
+            send_as(owner.address, USDC, calldata('transfer(address,uint256)', ['address', 'uint256'], [account, amount]))
+        margin0 = abi_decode(['uint256'], eth_call(EXCHANGE, calldata('freeMargin(address)', ['address'], [account])))[0]
+        r = send_as(AGENT, FUNDER, calldata(f'topUp({PERMISSION_T},uint160)', [PERMISSION_T, 'uint160'], [perm_tuple, amount]))
+        margin1 = abi_decode(['uint256'], eth_call(EXCHANGE, calldata('freeMargin(address)', ['address'], [account])))[0]
+        check('agent topUp with that permission moves 5 mUSDC into margin', margin1 - margin0 == amount, f'freeMargin +{(margin1 - margin0) / 1e18} (tx {r["transactionHash"][:10]}…)')
+
+        # ── sign the credential for the new session in the list ──
+        row = page.locator('tbody tr').filter(has=page.locator('td:first-child', has_text=re.compile(rf'^\s*{sid}\s*$')))
+        row.wait_for(timeout=30_000)
+        check('new session appears in the list', row.count() == 1, ' '.join(row.inner_text().split())[:160])
+        row.get_by_role('button', name='Issue VC').click()
+        try:
+            page.wait_for_function(f"() => {{ const m = JSON.parse(localStorage.getItem('pepelab_vc_{CHAIN_ID}_{account.lower()}') || '{{}}'); return !!m['{sid}'] }}", timeout=60_000)
+        except Exception:
+            page.screenshot(path=str(OUT / '3_vc_fail.png'), full_page=True)
+            print('rpc methods:', sorted(set(rpc_log)), 'console errors:', console_errors[:5], 'storage:', page.evaluate("JSON.stringify(localStorage)")[:400])
+            raise
+        vcs = json.loads(page.evaluate(f"localStorage.getItem('pepelab_vc_{CHAIN_ID}_{account.lower()}')"))
+        vc = vcs[str(sid)]
+        (OUT / 'vc.json').write_text(json.dumps(vc, indent=2))
+        page.screenshot(path=str(OUT / '3_credential.png'), full_page=True)
+        browser.close()
+    # GitHub Pages serves a deep link (/sessions) through 404.html (SPA fallback): that 404 is expected.
+    doc_url = f'{SITE}/sessions'
+    unexpected_404 = [u for u in not_found if u.rstrip('/') != doc_url]
+    console_errors = [e for e in console_errors if not (e.startswith('Failed to load resource') and not unexpected_404)]
+    check('no failed requests besides the SPA deep-link fallback', not unexpected_404, '; '.join(unexpected_404[:3]))
+
+    digest = bytes.fromhex(wallet_state['last_digest'][2:])
+    sig = bytes.fromhex(vc['proof']['proofValue'][2:])
+    magic = eth_call(account, calldata('isValidSignature(bytes32,bytes)', ['bytes32', 'bytes'], [digest, sig]))[:4].hex()
+    check('ERC-1271 isValidSignature(digest, credential signature) == 0x1626ba7e', magic == '1626ba7e', '0x' + magic)
+    check('no console errors on the page', not console_errors, '; '.join(console_errors[:3]))
+    agent = subprocess.run(['node', str(AGENT_DIR / 'node_modules' / 'tsx' / 'dist' / 'cli.mjs'), 'examples/verify-vc-file.ts', str(OUT / 'vc.json'), RPC],
+                           cwd=AGENT_DIR, capture_output=True, text=True, timeout=120)
+    check("agent's verifyAuthorizationVCWithProvider accepts the credential", agent.returncode == 0, (agent.stdout or agent.stderr).strip()[:200])
+    (OUT / 'rpc_methods.json').write_text(json.dumps(sorted(set(rpc_log))))
+    (OUT / 'result.json').write_text(json.dumps({'scenario': SCENARIO, 'site': SITE, 'account': account, 'session': sid,
+                                                 'checks': [{'name': n, 'ok': o, 'detail': d} for n, o, d in checks]}, indent=2))
+    failed_n = sum(1 for _, o, _ in checks if not o)
+    print(f'\n{len(checks) - failed_n}/{len(checks)} checks passed — scenario {SCENARIO}, account {account}, session #{sid}')
+    return 1 if failed_n else 0
+
+
+if __name__ == '__main__':
+    sys.exit(main())
