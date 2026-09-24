@@ -76,6 +76,15 @@ Verified on-chain after deploy: exchange owner = deployer; exchange oracle / usd
 
 The Base Sepolia Keeper workflow runs with the keeper key (GitHub secrets `KEEPER_PRIVATE_KEY`, `BASE_SEPOLIA_RPC_URL`); first run 2026-09-23 11:19 UTC succeeded.
 
+### Spend Permission funder (2026-09-24, with the owner's approval)
+
+| Change | Why | Tx |
+|---|---|---|
+| Deploy `SpendPermissionMarginFunder` at `0x20277169a755C690b98F0894EF57AF835469C9Af` (`script/DeploySpendPermissionFunder.s.sol`) | Base Accounts fund agent margin through Base Spend Permissions | `0x5f6ecfa0…` |
+| `PerpetualExchange.setAgentAuthorized(funder, true)` | `depositMarginFor` only accepts authorized contracts. The exchange now trusts three contracts to act for users: AgentSessionManager, CopyTracker, and this funder, which only calls `depositMarginFor` | `0x4d07412c…` |
+
+Source: Sourcify exact match. End-to-end run from a Base Account: [`demo/SPEND_PERMISSIONS_RUN.md`](demo/SPEND_PERMISSIONS_RUN.md).
+
 ## End-to-end demo (P0-3)
 
 `agent/examples/e2e-demo.ts` replays the full story with three separate keys and writes [`demo/RUN.md`](demo/RUN.md). Latest run (session #2): user deposits and opens a capped session → signs the EIP-712 VC → agent buys data and a trader signal over x402 (Circle USDC to the seller) → seller routes the signal fee 70/20/10 on chain → agent opens inside the caps → an over-cap order is **mined and reverted** with `MarginExceedsPerTradeCap` → agent closes → user revokes → a post-revoke order is **mined and reverted** with `SessionIsRevoked`.

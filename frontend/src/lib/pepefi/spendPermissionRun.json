@@ -1,0 +1,63 @@
+{
+  "generatedAt": "2026-09-24T08:19:34.889Z",
+  "account": "0x56D83fEe6cf6F0BFf345640C7527a1869677435F",
+  "owner": "0x2F188C934ffFa25D2af8354eb18fAE65038F5467",
+  "agent": "0xd3c6a11ef5aF3D197Ecd0C9C44B15a23138d0EB7",
+  "funder": "0x20277169a755C690b98F0894EF57AF835469C9Af",
+  "spendPermissionManager": "0xf85210B21cC50302F477BA56686d2019dC9b67Ad",
+  "sessionManager": "0x71125e25c903AD4e198e1863d5Bf26df97926CDe",
+  "sessionId": 4,
+  "allowance": 100,
+  "periodSeconds": 86400,
+  "steps": [
+    {
+      "n": "①",
+      "actor": "User",
+      "action": "create a Base Account (Coinbase Smart Wallet; owners: user key + SpendPermissionManager)",
+      "tx": "0x7351646d79441f45d6875aaa1ccf9508a7f9a25520dfece814cd6bf393912ead",
+      "result": "account 0x56D83fEe6cf6F0BFf345640C7527a1869677435F"
+    },
+    {
+      "n": "②",
+      "actor": "User",
+      "action": "move 300 mUSDC into the Base Account",
+      "tx": "0xd4c67722bb40bd57117e7d9024f0bf608d7a63b517cfda42e61a5b7f770a1e87",
+      "result": "wallet funded"
+    },
+    {
+      "n": "③",
+      "actor": "Base Account",
+      "action": "one batch: approve a Spend Permission (≤ 100 mUSDC per day, spender = funder), name the agent as top-up agent, open session #4 (50 per trade, 150 budget, 3x, sBTC/sETH, 7 days)",
+      "tx": "0x7f6939cd760f01214981c12a58e6237342cc47741d881c2730279bda0ce9b915",
+      "result": "permission approved; session #4"
+    },
+    {
+      "n": "④",
+      "actor": "Base Account",
+      "action": "sign the EIP-712 authorization credential (ERC-1271 smart-account signature)",
+      "tx": null,
+      "result": "valid: the Base Account's isValidSignature accepted it"
+    },
+    {
+      "n": "⑤",
+      "actor": "Agent",
+      "action": "top up 60 mUSDC through the Spend Permission",
+      "tx": "0xf5f2db3edda78fcecd6ac42eebefb9aa1d677967fbb8d190b92f44d616a698b9",
+      "result": "Base Account margin 0.0 → 60.0 mUSDC"
+    },
+    {
+      "n": "⑥",
+      "actor": "Agent",
+      "action": "top up 50 more the same day (110 > 100)",
+      "tx": "0xd68a35bbd59443023f95376fb28d13fd227ea878fc31c8bb02d172ce8a9b5b55",
+      "result": "reverted on chain: ExceededSpendPermission"
+    },
+    {
+      "n": "⑦",
+      "actor": "Agent",
+      "action": "openPositionForSession(#4, sBTC, long, 20, 2x) with the Base Account's credential",
+      "tx": "0x637865baeb7c7e90f5f6910126958b92c63a29b436fcdea4d1e779df247acb26",
+      "result": "position #3"
+    }
+  ]
+}

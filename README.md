@@ -9,7 +9,8 @@ Entered in the Colosseum Crypto World's Fair (Base track). PepeLab started befor
 ## See it in 3 minutes
 
 1. Open **https://zuemen.github.io/pepelab-colosseum/agent-mode**; no wallet is needed. It shows x402 payments, session caps and agent actions, read straight from Base Sepolia. The **Try it** button simulates the session's agent placing an over-cap or off-list order, and shows the contract's own revert.
-2. Or read [`demo/RUN.md`](demo/RUN.md): eight steps with keys held by three separate parties (user, agent, signal seller), each on-chain step linked to BaseScan. The x402 payments are signed by the agent and submitted by the x402 facilitator. Two of the transactions are orders **mined and reverted** by the contract: one over the cap, one after revocation.
+2. Or read [`demo/SPEND_PERMISSIONS_RUN.md`](demo/SPEND_PERMISSIONS_RUN.md): a **Base Account** (Coinbase Smart Wallet) funds the agent through a **Base Spend Permission** (at most 100 mUSDC per day), opens the session in one batch, and signs the agent's credential (ERC-1271); a top-up over the daily allowance is mined and reverted by Coinbase's SpendPermissionManager.
+3. Or read [`demo/RUN.md`](demo/RUN.md): eight steps with keys held by three separate parties (user, agent, signal seller), each on-chain step linked to BaseScan. The x402 payments are signed by the agent and submitted by the x402 facilitator. Two of the transactions are orders **mined and reverted** by the contract: one over the cap, one after revocation.
 
 ## How it works
 
@@ -39,8 +40,9 @@ Source of truth: `frontend/src/contracts/addresses.ts`. This is this repository'
 | TraderStake | [`0x790fd51ad485013C5b87FD7765679461675A31FD`](https://base-sepolia.blockscout.com/address/0x790fd51ad485013C5b87FD7765679461675A31FD?tab=contract) |
 | KYCRegistry | [`0x34D644b9d58c1D4B0Cb805BA49440F53Ca0378d0`](https://base-sepolia.blockscout.com/address/0x34D644b9d58c1D4B0Cb805BA49440F53Ca0378d0?tab=contract) |
 | MockSwapRouter | [`0xCebdae595260F31541E44FBFfC80614d8B73C87a`](https://base-sepolia.blockscout.com/address/0xCebdae595260F31541E44FBFfC80614d8B73C87a?tab=contract) |
+| SpendPermissionMarginFunder (Base Spend Permissions, 2026-09-24) | [`0x20277169a755C690b98F0894EF57AF835469C9Af`](https://base-sepolia.blockscout.com/address/0x20277169a755C690b98F0894EF57AF835469C9Af?tab=contract) |
 
-Source code for all 16 contracts of this deployment (the table plus three oracle adapters and the x402 InsuranceVault) is verified on [Blockscout](https://base-sepolia.blockscout.com) and [Sourcify](https://sourcify.dev) as an exact match (creation and runtime bytecode), checked 2026-09-24. Click an address to read the code.
+Source code for all 16 contracts of the 2026-09-23 deployment (the table plus three oracle adapters and the x402 InsuranceVault) is verified on [Blockscout](https://base-sepolia.blockscout.com) and [Sourcify](https://sourcify.dev) as an exact match (creation and runtime bytecode), checked 2026-09-24. The SpendPermissionMarginFunder added on 2026-09-24 is an exact match on Sourcify. Click an address to read the code.
 
 The exchange lets two contracts act for a user: the AgentSessionManager above (agents, within the session's limits) and the CopyTracker (copy trading, which each follower opts into). An agent's own key has no rights on the exchange.
 

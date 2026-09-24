@@ -82,11 +82,11 @@ flowchart LR
 - Every contract is deployed on Base Sepolia. The exchange lets two contracts act for a user: the AgentSessionManager (agents, within the session's limits) and the CopyTracker (copy trading, which each follower opts into). An agent's own key has no rights on the exchange.
 - x402 payments settle in **Circle's official Base Sepolia USDC** (`0x036CbD53…CF7e`, EIP-3009 `transferWithAuthorization`) through the x402 facilitator. Each payment is an on-chain USDC transfer from agent to seller.
 - Signal revenue is split on chain by a FeeRouter bound to that same USDC (`routeExternalRevenue`).
+- **Base Account + Base Spend Permissions, live (added 2026-09-24).** A Base Account (Coinbase Smart Wallet) approves a Spend Permission through Coinbase's SpendPermissionManager (at most 100 mUSDC per day, only to our `SpendPermissionMarginFunder` [`0x2027…C9Af`](https://base-sepolia.blockscout.com/address/0x20277169a755C690b98F0894EF57AF835469C9Af?tab=contract)), names the agent, and opens the capped session, in one batch. The agent tops up the account's margin within the allowance; a top-up over the allowance is mined and reverted by SpendPermissionManager; the agent then trades inside the session caps with a credential the Base Account signed (ERC-1271). Recorded run with every transaction: [`demo/SPEND_PERMISSIONS_RUN.md`](../demo/SPEND_PERMISSIONS_RUN.md). The Spend Permission bounds how much can leave the wallet per day; the session bounds what the agent does with it. Design and trade-offs: [`docs/design/SPEND_PERMISSIONS.md`](design/SPEND_PERMISSIONS.md).
 - The price keeper runs on GitHub Actions against this deployment. Oracle adapters for Pyth and Chainlink on Base Sepolia are deployed (see limitations).
 
 **Planned (not in this submission):**
 
-- Pair the session with **Base Account Spend Permissions**. Spend Permissions bound the USDC the agent can move per period; the session bounds what it can do with it (leverage, assets, per-trade size). The two are complementary.
 - List the signal API in **x402 Bazaar**, the CDP facilitator's service catalog ([docs](https://docs.cdp.coinbase.com/x402/bazaar)).
 - **Paymaster**-sponsored session creation, so a user needs no ETH to delegate.
 - A small Base mainnet deployment of the x402 layer only (risk review first; see Roadmap).
@@ -109,8 +109,9 @@ Source of truth: `frontend/src/contracts/addresses.ts`. Deployment details and o
 | KYCRegistry | [`0x34D644b9d58c1D4B0Cb805BA49440F53Ca0378d0`](https://base-sepolia.blockscout.com/address/0x34D644b9d58c1D4B0Cb805BA49440F53Ca0378d0?tab=contract) |
 | TraderStake | [`0x790fd51ad485013C5b87FD7765679461675A31FD`](https://base-sepolia.blockscout.com/address/0x790fd51ad485013C5b87FD7765679461675A31FD?tab=contract) |
 | MockSwapRouter | [`0xCebdae595260F31541E44FBFfC80614d8B73C87a`](https://base-sepolia.blockscout.com/address/0xCebdae595260F31541E44FBFfC80614d8B73C87a?tab=contract) |
+| SpendPermissionMarginFunder (Base Spend Permissions, 2026-09-24) | [`0x20277169a755C690b98F0894EF57AF835469C9Af`](https://base-sepolia.blockscout.com/address/0x20277169a755C690b98F0894EF57AF835469C9Af?tab=contract) |
 
-Source code for all 16 contracts of this deployment (the table plus three oracle adapters and the x402 InsuranceVault) is verified on [Blockscout](https://base-sepolia.blockscout.com) and [Sourcify](https://sourcify.dev) as an exact match (creation and runtime bytecode), checked 2026-09-24. Click an address to read the code.
+Source code for all 16 contracts of the 2026-09-23 deployment (the table plus three oracle adapters and the x402 InsuranceVault) is verified on [Blockscout](https://base-sepolia.blockscout.com) and [Sourcify](https://sourcify.dev) as an exact match (creation and runtime bytecode), checked 2026-09-24. The SpendPermissionMarginFunder added on 2026-09-24 is an exact match on Sourcify. Click an address to read the code.
 
 Judge sandbox: session **#3** (agent `0xd3c6a11e…0EB7`, 50 per trade, 150 budget, 3x, sBTC/sETH; created 2026-09-23, tx `0xc3d6d00f…4336`) stays active until 2026-12-12. The Agent Mode "try it" button uses the newest active session, which is #3 unless a newer one is opened.
 
@@ -190,7 +191,7 @@ Sources: see §1 (read 2026-09-23). A dash means the source documents no such co
 ## 10. Roadmap
 
 1. **Venue-agnostic mandates.** Move the session checks into a guard any perp venue on Base can call before `openPositionFor`. Our exchange becomes the reference venue.
-2. **Base-native stack.** Spend Permissions for the cash leg; Paymaster-sponsored delegation; x402 Bazaar listing; an ERC-8004 identity entry for each agent (the standard is still a Draft: [EIP-8004](https://eips.ethereum.org/EIPS/eip-8004)).
+2. **Base-native stack.** Spend Permissions for the cash leg are live on Base Sepolia (§5); next, a UI for approving them from a Base Account, Paymaster-sponsored delegation; x402 Bazaar listing; an ERC-8004 identity entry for each agent (the standard is still a Draft: [EIP-8004](https://eips.ethereum.org/EIPS/eip-8004)).
 3. **Net-exposure budgets.** Today `totalMarginBudget` is cumulative: closing does not refund budget. That is conservative by design. Add an optional net-exposure mode.
 4. **Decentralized pricing.** The oracle adapters are deployed. Pyth on Base Sepolia is pull-based and was stale when we checked, so the next step is to push Hermes price updates from the keeper before relying on it.
 5. **Institutional agents (vLEI).** A fund or corporate treasury should be able to prove which regulated legal entity authorized an agent, and which officer signed. GLEIF's vLEI carries exactly that: a Legal Entity credential plus an Official Organizational Role (OOR) credential for the signer ([GLEIF](https://www.gleif.org/en/organizational-identity/lei-vlei/the-verifiable-lei-vlei)). Our authorization VC would add an OOR-backed issuer, and `KYCRegistry` would accept vLEI-verified entities. That opens RWA and institutional flow, where "who authorized this agent" is a compliance requirement rather than a nice-to-have. GLEIF has published work on agent delegation ([blog, 2026-08-25](https://www.gleif.org/en/newsroom/blog/why-ai-agents-need-verifiable-organizational-identity)). This is a roadmap item, not part of this submission.
@@ -237,6 +238,7 @@ The wider capstone app (marketplace, vaults, staking, ESG and carbon features) a
 | **Agent Mode page.** A wallet-free judge view of agent payments, session caps and rejections, with "Try it" simulations against the live contract. | `ed3f531`, `e552317` |
 | **Open, English, public packaging.** English README and submission, MIT license, English MCP and signal-API discovery text, English frontend on GitHub Pages. | `7d7523c`, `d888ab9`, `bb6f840`, `29dd595`, `109f3a6`, `7556c3b` |
 | **x402 signal API hardening.** Record revenue only after the facilitator confirms settlement, then settle in batches from a queue (this also fixed routing revenue for payments that never settled); facilitator latency probe; explicit payment timeouts; facilitator error handling; written threat model for credentials passed as tool arguments. | `c738cb3`, `de46da8` |
+| **Base Account + Spend Permissions.** `SpendPermissionMarginFunder` (8 fork tests against Base Sepolia's real SpendPermissionManager and Coinbase Smart Wallet factory), deployed and authorized on Base Sepolia; agent SDK and MCP `top_up_margin`; authorization credentials signed by smart accounts (ERC-1271); an end-to-end run from a Base Account. | `1f38197`, `c72b8e7`, `0035d44`, `b3b48bf`; deploy tx `0x5f6ecfa0…`, authorize tx `0x4d07412c…` |
 | **Reliability fixes found while preparing the demo.** Event scans under the 1,000-block `eth_getLogs` cap of sepolia.base.org; keeper nonce reuse on a lagging load-balanced RPC. | `6da5d42`, `9e5340c` |
 | **Retail app work (not the focus of this submission).** Adopt a published allocation as spot tokens, swap-only exchange page, portfolio and token page polish, reputation staking, ESG carbon-tier display. | `ac3e2a0`, `b4b2c22`, `fa7dbe0`, `7c830b9`, `155b3dd`, `8219a0b`, `043f9ca` |
 
