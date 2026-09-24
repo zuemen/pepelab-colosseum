@@ -1,5 +1,7 @@
 # x402-loop — 完全自主的 x402 交易迴圈
 
+> ⚠️ **Inherited from the pre-contest capstone project.** Contract addresses and session ids in this file refer to the capstone deployment, not to the contest deployment. Current addresses: `frontend/src/contracts/addresses.ts` and the main README. Do not send transactions to the addresses below.
+
 agent 每隔一段時間對一組資產各跑一次決策：**x402 付費買決策級資料 → 自己判斷 long/short/skip → 該進才經 session #6 下單**。同資產「已有未平倉部位」或「冷卻期內已開過」會自動跳過，避免堆倉。
 
 ```bash

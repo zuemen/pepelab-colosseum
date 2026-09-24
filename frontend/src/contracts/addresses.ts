@@ -82,7 +82,8 @@ const BASE_SEPOLIA: ChainAddresses = {
 
 // Phase 4 production-oracle showcase on Base Sepolia (deployed, NOT wired into
 // the live exchange — which runs on MockOracle so synthetic-asset demos work).
-// AggregatorOracle fronts Chainlink + Pyth (Pyth live on Base Sepolia).
+// AggregatorOracle fronts Chainlink + Pyth. The Pyth feed on Base Sepolia was stale when checked on
+// 2026-09-23, so prices come from the keeper-fed MockOracle (see docs/SUBMISSION.md section 11).
 export const BASE_SEPOLIA_ORACLE_SHOWCASE = {
   ChainlinkAdapter: "0xb51Ab689348d5Ce69f6FB9dF45efe359e162964A",
   PythAdapter:      "0x2879d41C45135F87Ed92373F43b20446b07571Fd",

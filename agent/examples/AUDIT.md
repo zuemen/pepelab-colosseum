@@ -1,5 +1,7 @@
 # 自主 agent：VC/SSI 強制驗證 + 不可否認稽核（Part E）
 
+> ⚠️ **Inherited from the pre-contest capstone project.** Contract addresses and session ids in this file refer to the capstone deployment, not to the contest deployment. Current addresses: `frontend/src/contracts/addresses.ts` and the main README. Do not send transactions to the addresses below.
+
 讓 agent 的每一筆自主交易都「可追溯、可承認、不可否認」：每筆交易綁在一張**使用者簽發的 VC** 之下，並留下可獨立驗證的稽核紀錄。
 
 - **SSI 角色**：issuer = 使用者（`0xE80A`，MetaMask/EIP-712 簽 VC）｜ holder = agent（持 VC）｜ verifier = 下單前 `verifyAuthorizationVC` + 鏈上交叉比對。

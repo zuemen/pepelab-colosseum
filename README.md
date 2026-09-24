@@ -4,6 +4,8 @@ A user gives an AI agent a trading mandate — per-trade margin, total budget, m
 
 Entered in the Colosseum Crypto World's Fair (Base track). PepeLab started before the contest as our NCCU capstone; [the submission discloses the prior work](docs/SUBMISSION.md#12-development-history-and-disclosure) and lists what we built during the contest. **Submission write-up: [`docs/SUBMISSION.md`](docs/SUBMISSION.md)** · deployment log and decisions: [`HACKATHON.md`](HACKATHON.md) · latest demo run: [`demo/RUN.md`](demo/RUN.md).
 
+![Agent Mode: the contract rejects an over-cap order from the agent, live on Base Sepolia](docs/img/agent-mode.png)
+
 ## See it in 3 minutes
 
 1. Open **https://zuemen.github.io/pepelab-colosseum/agent-mode**; no wallet is needed. It shows x402 payments, session caps and agent actions, read straight from Base Sepolia. The **Try it** button simulates the session's agent placing an over-cap or off-list order, and shows the contract's own revert.
@@ -63,6 +65,8 @@ VITE_LOCALE=en yarn dev         # then open /agent-mode
 Test keys need Base Sepolia ETH. The agent key also needs Circle test USDC (faucet.circle.com). Users get margin from `MockUSDC.faucet()`, which gives 1,000 mUSDC per address per 24 h.
 
 ## Repository layout
+
+Documentation index, including which documents were inherited from the pre-contest capstone: [`docs/README.md`](docs/README.md).
 
 | Path | Contents |
 |---|---|

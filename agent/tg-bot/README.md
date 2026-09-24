@@ -1,5 +1,7 @@
 # PepeLab — Telegram 交易 agent
 
+> ⚠️ **Inherited from the pre-contest capstone project.** Contract addresses and session ids in this file refer to the capstone deployment, not to the contest deployment. Current addresses: `frontend/src/contracts/addresses.ts` and the main README. Do not send transactions to the addresses below.
+
 在 Telegram 用自然語言下單，bot 憑授權 VC 在 session 限額內上鏈開倉（Base Sepolia）。
 
 1. **填 `agent/.env`**（複製 `agent/.env.example`）：`TELEGRAM_BOT_TOKEN`（BotFather）、`AGENT_PRIVATE_KEY`（你的 agent session key）、`TELEGRAM_ALLOWED_CHAT`（你的 chat id）、`DEMO_SESSION_ID`、`SESSION_MANAGER_ADDRESS`、`BASE_SEPOLIA_RPC_URL`。
