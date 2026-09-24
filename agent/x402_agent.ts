@@ -26,7 +26,7 @@ import { config as dotenvConfig } from "dotenv";
 import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { openPositionForSession } from "@pepelab/shared";
-import { loadVc, localVerifyVc } from "./examples/vc-gate.ts";
+import { loadVc, verifyVcForAgent } from "./examples/vc-gate.ts";
 
 // ── Load env from agent/.env ───────────────────────────────────────────────
 const __here = dirname(fileURLToPath(import.meta.url));
@@ -286,7 +286,7 @@ async function executeTradeViaSession(
   // 現在一律走 shared 的 openPositionForSession：VC 必要、caps 預檢、assetId 與
   // executionFee 都從單一來源取得。
   const vc = loadVc();
-  const vcChk = localVerifyVc(vc, walletClient.account.address, Number(SESSION_ID));
+  const vcChk = await verifyVcForAgent(vc, walletClient.account.address, Number(SESSION_ID));
   console.log(`  VC/SSI    : ${vcChk.ok ? "✓" : "✗"} ${vcChk.reason}`);
   if (!vcChk.ok) {
     console.log("  ✗ 缺有效授權 VC（設 AGENT_AUTH_VC_PATH）→ 拒絕下單。");

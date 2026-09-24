@@ -74,8 +74,15 @@ const VC: AuthorizationVC = await (async () => {
     process.exit(1);
   }
   // EOA 用 ecrecover；Base Account 等智慧帳戶簽的憑證用 ERC-1271 在鏈上驗章。
-  const offline = verifyAuthorizationVC(parsed);
-  const v = offline.valid ? offline : await verifyAuthorizationVCWithProvider(parsed, makeProvider());
+  let v = verifyAuthorizationVC(parsed);
+  if (!v.valid) {
+    try {
+      v = await verifyAuthorizationVCWithProvider(parsed, makeProvider());
+    } catch (e) {
+      // 沒設 RPC 或 RPC 失敗：照樣拒絕啟動，訊息維持乾淨。
+      v = { valid: false, reason: `${v.reason}；ERC-1271 驗章無法執行：${(e as Error).message}` };
+    }
+  }
   if (!v.valid) {
     console.error(`✗ VC 驗證失敗：${v.reason}（請重新在前端簽發）`);
     process.exit(1);

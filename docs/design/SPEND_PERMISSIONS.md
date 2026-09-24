@@ -1,4 +1,4 @@
-# Base Spend Permissions for the cash leg (prototype, fork-tested, not deployed)
+# Base Spend Permissions for the cash leg
 
 Status (2026-09-24): **deployed on Base Sepolia** at `0x20277169a755C690b98F0894EF57AF835469C9Af` and authorized on the exchange, with the owner's approval (deploy tx `0x5f6ecfa0b25cb6f7e9e61dcdeed5a3bf442c5cf9ac4d41602eb873fc4e236493`, authorize tx `0x4d07412c724e63a00bd798407f9777c28473f8b695c4488d3a45c9e52038cb4f`). Source verified on Sourcify (exact match) and Blockscout (full match). End-to-end run from a real Base Account: [`demo/SPEND_PERMISSIONS_RUN.md`](../../demo/SPEND_PERMISSIONS_RUN.md). Rehearsed first on a local anvil fork.
 
