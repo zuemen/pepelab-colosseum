@@ -31,6 +31,7 @@ import CircularProgress from '@mui/material/CircularProgress'
 import { t, interpolate } from 'src/locales'
 import { getAddresses, ASSET_IDS, PRIMARY_CHAIN_ID } from 'src/contracts/addresses'
 import { classifySimulationFailure } from 'src/lib/pepefi/simulationOutcome'
+import { plainStep } from 'src/lib/pepefi/recordedRun'
 import { CIRCLE_USDC, READ_RPC, TRANSFER_TOPIC, parsePaymentLog, readProvider, scanLogs, type Payment } from 'src/lib/pepefi/x402Payments'
 import { getSessionManagerAddress } from 'src/contracts/sessionManager'
 import AgentSessionManagerABI from 'src/contracts/abi/AgentSessionManager.json'
@@ -361,15 +362,6 @@ export default function AgentModePage() {
           )}
         </Card>
 
-        {/* Recorded run */}
-        <Card sx={{ p: 3 }}>
-          <Typography variant="h6" sx={{ fontWeight: 'bold' }}>{t.agentMode.recorded.title}</Typography>
-          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-            {interpolate(t.agentMode.recorded.caption, { at: demoRun.generatedAt.slice(0, 16).replace('T', ' ') + ' UTC' })}
-          </Typography>
-          <RecordedSteps steps={demoRun.steps} />
-        </Card>
-
         {/* Base Account + Spend Permission run (shown once spend-permission-demo.ts has written its JSON) */}
         {spendPermissionRun && (
           <Card sx={{ p: 3 }}>
@@ -383,6 +375,15 @@ export default function AgentModePage() {
             <RecordedSteps steps={spendPermissionRun.steps} />
           </Card>
         )}
+
+        {/* Recorded run */}
+        <Card sx={{ p: 3 }}>
+          <Typography variant="h6" sx={{ fontWeight: 'bold' }}>{t.agentMode.recorded.title}</Typography>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+            {interpolate(t.agentMode.recorded.caption, { at: demoRun.generatedAt.slice(0, 16).replace('T', ' ') + ' UTC' })}
+          </Typography>
+          <RecordedSteps steps={demoRun.steps} />
+        </Card>
       </Stack>
     </Container>
   )
@@ -409,7 +410,7 @@ function RecordedSteps({ steps }: { steps: readonly RecordedStep[] }) {
             const rejected = s.result.startsWith('reverted')
             return (
               <TableRow key={s.n} sx={rejected ? { bgcolor: 'rgba(255,86,48,0.08)' } : undefined}>
-                <TableCell sx={cellMono}>{s.n}</TableCell>
+                <TableCell sx={cellMono}>{plainStep(s.n)}</TableCell>
                 <TableCell>{s.actor}</TableCell>
                 <TableCell sx={{ fontSize: 13 }}>{s.action}</TableCell>
                 <TableCell sx={{ fontSize: 13, color: rejected ? PEPE.short : undefined, fontWeight: rejected ? 'bold' : undefined }}>
