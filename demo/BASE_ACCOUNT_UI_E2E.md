@@ -19,7 +19,7 @@ with a mock wallet injected into the page.
 
 ## What was run
 
-`demo/e2e/base_account_fork_e2e.py` runs the E2E. The site under test was <https://zuemen.github.io/pepelab-colosseum>, at commit `7a10249`, on 2026-09-24.
+`demo/e2e/base_account_fork_e2e.py` runs the E2E. The site under test was <https://zuemen.github.io/pepelab-colosseum>, first at commit `7a10249` and again after the review fixes at `f57a933`, on 2026-09-24.
 
 The mock EIP-1193 wallet behaves like a Coinbase Smart Wallet:
 
@@ -36,11 +36,13 @@ The throwaway key only exists on the fork. The script never loads a real key, an
 |---|---|---|---|
 | `existing` | `0x56D83fEe…435F`, the Base Account from the recorded run | yes | 3 calls |
 | `fresh` | a new Coinbase Smart Wallet (factory `0x0BA5ED0c…`), whose only owner is the throwaway key | no | 4 calls (adds it first) |
+| `reject` | as `existing`, but the wallet declines `wallet_sendCalls` (EIP-1193 4001) | yes | none reaches the chain |
 
-## Result: 20/20 checks in both scenarios
+## Result: 20/20 checks in both setup scenarios
 
 After the script got a retry for a header button that re-renders while the page loads, it ran four more times in a row
-(two per scenario) and passed 20/20 each time.
+(two per scenario) and passed 20/20 each time. After the review fixes (`0cd77a4`) were deployed, all three scenarios
+ran again: `existing` 20/20, `fresh` 20/20, `reject` 8/8.
 
 ![The card after a confirmed batch, fresh scenario](../docs/img/base-account-card.png)
 
@@ -70,6 +72,14 @@ After the script got a retry for a header button that re-renders while the page 
 An earlier run found one bug, fixed in `7a10249`. After the batch landed, the card still said it would add
 SpendPermissionManager, and it still showed the old balance. Check 6 covers that now.
 
+## Rejection: 8/8 checks
+
+The first four checks are the same as rows 1–4 above. Then: the page says "You declined the request in your wallet. Nothing was
+sent."; the wallet was asked exactly once; `nextSessionId` did not move; the button is usable again. Before `0cd77a4`
+a rejection opened the wallet a second time. The page retried with the EIP-5792 1.0 request shape whenever an error
+message contained "version", and every ethers v6 error message ends with `version=6.x`. `walletCalls.test.ts` now runs
+wallet errors through a real ethers `BrowserProvider`.
+
 ## What this does not show
 
 - **Not a real Base Account in a real browser.** The mock produces the same calls and the same signature format as a
@@ -86,7 +96,7 @@ SpendPermissionManager, and it still showed the old balance. Check 6 covers that
 anvil --fork-url https://base-sepolia-rpc.publicnode.com --chain-id 84532 --block-time 1
 pip install playwright eth-account && python -m playwright install chromium
 (cd agent && npm ci)
-python demo/e2e/base_account_fork_e2e.py existing     # or: fresh
+python demo/e2e/base_account_fork_e2e.py existing     # or: fresh, reject
 ```
 
 Screenshots, the permission JSON, the credential and `result.json` are written to `demo/e2e/out/<scenario>/` (ignored by git).

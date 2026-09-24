@@ -14,6 +14,8 @@ Scenarios:
             real owner there), so no real key is used.
   fresh     a new Coinbase Smart Wallet whose only owner is the throwaway key: the page must add
             SpendPermissionManager as an owner inside the same batch.
+  reject    like existing, but the wallet declines wallet_sendCalls (EIP-1193 4001): the page must say
+            so, must not ask the wallet a second time, and nothing may reach the chain.
 
 After the page reports "Done", the script checks the fork state (session, top-up agent, SpendPermissionManager
 approval of the exact JSON the page shows), has the agent top up margin with that permission, signs the
@@ -22,7 +24,7 @@ session's credential from the list, and verifies it with ERC-1271 and with the a
 setup:  anvil --fork-url https://base-sepolia-rpc.publicnode.com --chain-id 84532 --block-time 1
         pip install playwright eth-account && python -m playwright install chromium
         (cd agent && npm ci)
-usage:  python demo/e2e/base_account_fork_e2e.py <existing|fresh> [site]
+usage:  python demo/e2e/base_account_fork_e2e.py <existing|fresh|reject> [site]
 """
 import json
 import subprocess
@@ -130,7 +132,7 @@ wallet_state = {'account': None, 'owner_index': None}
 
 
 def setup_account() -> None:
-    if SCENARIO == 'existing':
+    if SCENARIO in ('existing', 'reject'):
         account = EXISTING_ACCOUNT
         idx = abi_decode(['uint256'], eth_call(account, calldata('nextOwnerIndex()', [], [])))[0]
         # The existing owner adds the throwaway key as an owner (fork only).
@@ -146,7 +148,7 @@ def setup_account() -> None:
     ok = abi_decode(['bool'], eth_call(account, calldata('isOwnerAddress(address)', ['address'], [owner.address])))[0]
     check('fork setup: throwaway key is an owner of the account', ok, account)
     spm_owner = abi_decode(['bool'], eth_call(account, calldata('isOwnerAddress(address)', ['address'], [SPM])))[0]
-    check('fork setup: SpendPermissionManager owner state matches scenario', spm_owner == (SCENARIO == 'existing'), f'isOwner(SPM)={spm_owner}')
+    check('fork setup: SpendPermissionManager owner state matches scenario', spm_owner == (SCENARIO != 'fresh'), f'isOwner(SPM)={spm_owner}')
     wallet_state['account'] = account
     wallet_state['owner_index'] = idx
 
@@ -198,6 +200,9 @@ def handle(method: str, params_json: str) -> str:
         if method == 'wallet_sendCalls':
             req = params[0]
             wallet_state['send_request'] = req
+            wallet_state['send_count'] = wallet_state.get('send_count', 0) + 1
+            if SCENARIO == 'reject':
+                return json.dumps({'error': {'code': 4001, 'message': 'User rejected the request.'}})
             h = send_batch(req['calls'])
             return json.dumps({'result': {'id': h}})
         if method == 'wallet_getCallsStatus':
@@ -287,7 +292,22 @@ def main() -> int:
         cta.click()
         done = card.locator('.MuiAlert-root', has_text='Done')
         page.wait_for_function(
-            "c => /Done:|The batch failed|not confirmed after/.test(c.textContent)", arg=card.element_handle(), timeout=120_000)
+            "c => /Done:|The batch failed|not confirmed after|You declined/.test(c.textContent)", arg=card.element_handle(), timeout=120_000)
+        if SCENARIO == 'reject':
+            page.wait_for_timeout(3_000)  # a second wallet request, if the page made one, would arrive now
+            declined = card.locator('.MuiAlert-root', has_text='You declined the request in your wallet. Nothing was sent.')
+            check('page reports the rejection', declined.count() == 1, ' '.join(card.inner_text().split())[:200])
+            check('wallet asked exactly once (no retry after a rejection)', wallet_state.get('send_count') == 1, f"wallet_sendCalls x{wallet_state.get('send_count')}")
+            after_next = abi_decode(['uint256'], eth_call(ASM, calldata('nextSessionId()', [], [])))[0]
+            check('no session opened', after_next == before_next, f'nextSessionId {before_next} → {after_next}')
+            check('CTA usable again', cta.is_enabled(), cta.inner_text())
+            page.screenshot(path=str(OUT / '2_rejected.png'), full_page=True)
+            browser.close()
+            (OUT / 'result.json').write_text(json.dumps({'scenario': SCENARIO, 'site': SITE, 'account': account,
+                                                         'checks': [{'name': n, 'ok': o, 'detail': d} for n, o, d in checks]}, indent=2))
+            failed_n = sum(1 for _, o, _ in checks if not o)
+            print(f'\n{len(checks) - failed_n}/{len(checks)} checks passed — scenario {SCENARIO}, account {account}')
+            return 1 if failed_n else 0
         ok_done = done.count() > 0
         check('batch confirmed in the UI (Done alert)', ok_done, (done.first.inner_text() if ok_done else card.inner_text())[:300])
         page.screenshot(path=str(OUT / '2_done.png'), full_page=True)
