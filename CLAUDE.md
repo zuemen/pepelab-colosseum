@@ -1,3 +1,7 @@
+## Pending work
+
+Start here on a new machine or in the cloud: `docs/agents/NEXT_SESSION.md` holds the current state, the rules, the wallets (addresses only; keys are never in git), the task list and a progress log.
+
 ## Agent skills
 
 ### Issue tracker
